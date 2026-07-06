@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Columns2,
   Minus,
+  NotebookPen,
   Play,
   Plus,
   RefreshCcw,
@@ -22,12 +23,13 @@ import {
   Trash2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
 export type IslandMode = "collapsed" | "expanded";
 
 type EditorMode = "layout" | null;
-type TodoPageMode = "today" | "archive" | "review";
+type TodoPageMode = "today" | "daily" | "archive" | "review";
 type ArchiveLayout = "cards" | "timeline";
 
 type TodoItem = {
@@ -40,6 +42,7 @@ type TodoItem = {
 type TodoArchive = {
   date: string;
   todos: TodoItem[];
+  dailyNote: string;
   savedAt: number;
   savedToDisk: boolean;
   filePath?: string;
@@ -56,9 +59,10 @@ type IslandSettings = {
   opacity: number;
   sizeScale: number;
   marginY: number;
-  temporaryHideSeconds: number;
   taskTitleColor: string;
+  pendingTodoColor: string;
   islandBackgroundColor: string;
+  todoBackgroundColor: string;
 };
 
 type IslandPreset = {
@@ -66,18 +70,20 @@ type IslandPreset = {
   name: string;
   settings: IslandSettings;
   createdAt: number;
+  isDefault?: boolean;
 };
 
 type IslandShellProps = {
   mode: IslandMode;
   editor: EditorMode;
+  isTucked: boolean;
   activeTaskTitle: string | null;
   pendingTodoCount: number;
-  temporaryHideSeconds: number;
   onToggle: () => void;
   onCollapse: () => void;
   onMinimize: () => void;
-  onTemporarilyHide: () => void;
+  onTuck: () => void;
+  onReveal: () => void;
   onEditorChange: (editor: EditorMode) => void;
   children: ReactNode;
 };
@@ -88,6 +94,7 @@ const TODOS_STORAGE_KEY = "focusd-island-todos";
 const ACTIVE_TODO_STORAGE_KEY = "focusd-island-active-todo";
 const TODO_DATE_STORAGE_KEY = "focusd-island-current-date";
 const TODO_ARCHIVE_STORAGE_KEY = "focusd-island-archives";
+const DAILY_NOTE_STORAGE_KEY = "focusd-island-daily-note";
 const TODO_SAVE_DIRECTORY_STORAGE_KEY = "focusd-island-save-directory";
 const TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY =
   "focusd-island-last-saved-signature";
@@ -98,15 +105,37 @@ const TODO_TITLE_CHARACTERS_PER_LINE = 32;
 const TODO_MAX_ESTIMATED_TITLE_LINES = 5;
 const TODO_GROW_START_ROWS = 2;
 const TODO_SCROLL_START_ROWS = 6;
-const MAX_SETTING_PRESETS = 6;
-const DEFAULT_SETTINGS: IslandSettings = {
-  opacity: 100,
+const MAX_CUSTOM_SETTING_PRESETS = 6;
+const WHITE_PRESET_SETTINGS: IslandSettings = {
+  opacity: 95,
   sizeScale: 1,
-  marginY: 12,
-  temporaryHideSeconds: 5,
+  marginY: 31,
   taskTitleColor: "#66ffb8",
+  pendingTodoColor: "#1afbff",
   islandBackgroundColor: "#101013",
+  todoBackgroundColor: "#ffffff",
 };
+const KHAKI_PRESET_SETTINGS: IslandSettings = {
+  ...WHITE_PRESET_SETTINGS,
+  todoBackgroundColor: "#f8f4e9",
+};
+const DEFAULT_SETTINGS: IslandSettings = WHITE_PRESET_SETTINGS;
+const DEFAULT_SETTING_PRESETS: IslandPreset[] = [
+  {
+    id: "default-white",
+    name: "白色",
+    settings: WHITE_PRESET_SETTINGS,
+    createdAt: 0,
+    isDefault: true,
+  },
+  {
+    id: "default-khaki",
+    name: "卡其",
+    settings: KHAKI_PRESET_SETTINGS,
+    createdAt: 0,
+    isDefault: true,
+  },
+];
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -117,16 +146,6 @@ function getColorSetting(value: unknown, fallback: string) {
   return typeof value === "string" && HEX_COLOR_PATTERN.test(value)
     ? value
     : fallback;
-}
-
-function getSecondsSetting(value: unknown, fallback: number) {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-
-  return clamp(Math.round(parsed), 1, 60);
 }
 
 function normalizeSettings(
@@ -144,19 +163,49 @@ function normalizeSettings(
       0,
       160,
     ),
-    temporaryHideSeconds: getSecondsSetting(
-      settings?.temporaryHideSeconds,
-      DEFAULT_SETTINGS.temporaryHideSeconds,
-    ),
     taskTitleColor: getColorSetting(
       settings?.taskTitleColor,
       DEFAULT_SETTINGS.taskTitleColor,
+    ),
+    pendingTodoColor: getColorSetting(
+      settings?.pendingTodoColor,
+      DEFAULT_SETTINGS.pendingTodoColor,
     ),
     islandBackgroundColor: getColorSetting(
       settings?.islandBackgroundColor,
       DEFAULT_SETTINGS.islandBackgroundColor,
     ),
+    todoBackgroundColor: getColorSetting(
+      settings?.todoBackgroundColor,
+      DEFAULT_SETTINGS.todoBackgroundColor,
+    ),
   };
+}
+
+function getDefaultSettingPresets(): IslandPreset[] {
+  return DEFAULT_SETTING_PRESETS.map((preset) => ({
+    ...preset,
+    settings: { ...preset.settings },
+  }));
+}
+
+function mergeWithDefaultSettingPresets(presets: IslandPreset[]) {
+  const defaultPresets = getDefaultSettingPresets();
+  const defaultIds = new Set(defaultPresets.map((preset) => preset.id));
+  const defaultNames = new Set(defaultPresets.map((preset) => preset.name));
+  const customPresets = presets
+    .filter(
+      (preset) =>
+        !defaultIds.has(preset.id) && !defaultNames.has(preset.name.trim()),
+    )
+    .map((preset) => ({ ...preset, isDefault: false }))
+    .slice(0, MAX_CUSTOM_SETTING_PRESETS);
+
+  return [...defaultPresets, ...customPresets];
+}
+
+function isDefaultSettingPreset(presetId: string) {
+  return DEFAULT_SETTING_PRESETS.some((preset) => preset.id === presetId);
 }
 
 function getTodoTitleLineCount(title: string) {
@@ -201,17 +250,17 @@ function loadSettingPresets(): IslandPreset[] {
   const stored = window.localStorage.getItem(SETTINGS_PRESETS_STORAGE_KEY);
 
   if (!stored) {
-    return [];
+    return getDefaultSettingPresets();
   }
 
   try {
     const parsed = JSON.parse(stored) as Partial<IslandPreset>[];
 
     if (!Array.isArray(parsed)) {
-      return [];
+      return getDefaultSettingPresets();
     }
 
-    return parsed
+    const presets = parsed
       .map((preset, index) => ({
         id:
           typeof preset.id === "string" && preset.id
@@ -224,11 +273,22 @@ function loadSettingPresets(): IslandPreset[] {
         settings: normalizeSettings(preset.settings),
         createdAt:
           typeof preset.createdAt === "number" ? preset.createdAt : Date.now(),
-      }))
-      .slice(0, MAX_SETTING_PRESETS);
+        isDefault: false,
+      }));
+
+    return mergeWithDefaultSettingPresets(presets);
   } catch {
-    return [];
+    return getDefaultSettingPresets();
   }
+}
+
+function normalizeTodo(todo: Partial<TodoItem>): TodoItem {
+  return {
+    id: typeof todo.id === "string" && todo.id ? todo.id : createTodoId(),
+    title: todo.title?.trim() ?? "",
+    completed: Boolean(todo.completed),
+    createdAt: typeof todo.createdAt === "number" ? todo.createdAt : Date.now(),
+  };
 }
 
 function loadTodos(): TodoItem[] {
@@ -247,16 +307,7 @@ function loadTodos(): TodoItem[] {
 
     return parsed
       .filter((todo) => typeof todo.title === "string" && todo.title.trim())
-      .map((todo) => ({
-        id:
-          typeof todo.id === "string" && todo.id
-            ? todo.id
-            : createTodoId(),
-        title: todo.title?.trim() ?? "",
-        completed: Boolean(todo.completed),
-        createdAt:
-          typeof todo.createdAt === "number" ? todo.createdAt : Date.now(),
-      }));
+      .map(normalizeTodo);
   } catch {
     return [];
   }
@@ -272,6 +323,25 @@ function getLocalDateString(date = new Date()) {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function getDisplayDateParts(date: string) {
+  const [fallbackYear = date, fallbackMonth = "", fallbackDay = ""] =
+    date.split("-");
+  const parsedDate = new Date(`${date}T00:00:00`);
+  const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  const hasValidDate = !Number.isNaN(parsedDate.getTime());
+
+  return {
+    year: hasValidDate ? String(parsedDate.getFullYear()) : fallbackYear,
+    month: hasValidDate
+      ? String(parsedDate.getMonth() + 1).padStart(2, "0")
+      : fallbackMonth,
+    day: hasValidDate
+      ? String(parsedDate.getDate()).padStart(2, "0")
+      : fallbackDay,
+    weekday: hasValidDate ? weekdays[parsedDate.getDay()] : "",
+  };
 }
 
 function loadCurrentTodoDate() {
@@ -301,19 +371,10 @@ function loadTodoArchives(): TodoArchive[] {
               .filter(
                 (todo) => typeof todo.title === "string" && todo.title.trim(),
               )
-              .map((todo) => ({
-                id:
-                  typeof todo.id === "string" && todo.id
-                    ? todo.id
-                    : createTodoId(),
-                title: todo.title?.trim() ?? "",
-                completed: Boolean(todo.completed),
-                createdAt:
-                  typeof todo.createdAt === "number"
-                    ? todo.createdAt
-                    : Date.now(),
-              }))
+              .map(normalizeTodo)
           : [],
+        dailyNote:
+          typeof archive.dailyNote === "string" ? archive.dailyNote : "",
         savedAt: typeof archive.savedAt === "number" ? archive.savedAt : 0,
         savedToDisk: Boolean(archive.savedToDisk),
         filePath:
@@ -329,13 +390,18 @@ function loadSaveDirectory() {
   return window.localStorage.getItem(TODO_SAVE_DIRECTORY_STORAGE_KEY) ?? "";
 }
 
-function getTodoSignature(date: string, todos: TodoItem[]) {
+function loadDailyNote() {
+  return window.localStorage.getItem(DAILY_NOTE_STORAGE_KEY) ?? "";
+}
+
+function getTodoSignature(date: string, todos: TodoItem[], dailyNote: string) {
   return JSON.stringify({
     date,
     todos: todos.map((todo) => ({
       title: todo.title,
       completed: todo.completed,
     })),
+    dailyNote,
   });
 }
 
@@ -343,6 +409,17 @@ function formatTodosAsMarkdown(todos: TodoItem[]) {
   return todos
     .map((todo) => `- [${todo.completed ? "x" : " "}] ${todo.title}`)
     .join("\n");
+}
+
+function formatTodoDocumentAsMarkdown(todos: TodoItem[], dailyNote: string) {
+  const todoMarkdown = formatTodosAsMarkdown(todos);
+  const dailyMarkdown = dailyNote.trimEnd();
+
+  if (todoMarkdown && dailyMarkdown) {
+    return `${todoMarkdown}\n\n${dailyMarkdown}`;
+  }
+
+  return todoMarkdown || dailyMarkdown;
 }
 
 function createTodoId() {
@@ -356,13 +433,14 @@ function createTodoId() {
 function IslandShell({
   mode,
   editor,
+  isTucked,
   activeTaskTitle,
   pendingTodoCount,
-  temporaryHideSeconds,
   onToggle,
   onCollapse,
   onMinimize,
-  onTemporarilyHide,
+  onTuck,
+  onReveal,
   onEditorChange,
   children,
 }: IslandShellProps) {
@@ -385,6 +463,11 @@ function IslandShell({
           onToggle();
         }
       }}
+      onMouseEnter={() => {
+        if (isTucked) {
+          onReveal();
+        }
+      }}
     >
       <div className="island__collapsed" aria-hidden={isExpanded}>
         <span className="island__pulse" />
@@ -399,11 +482,11 @@ function IslandShell({
         <button
           className="island__quiet-button"
           type="button"
-          title={`暂时隐藏 ${temporaryHideSeconds} 秒`}
-          aria-label={`暂时隐藏岛屿 ${temporaryHideSeconds} 秒`}
+          title="收起"
+          aria-label="收起岛屿"
           onClick={(event) => {
             event.stopPropagation();
-            onTemporarilyHide();
+            onTuck();
           }}
         />
       </div>
@@ -546,53 +629,6 @@ function ColorControl({
   );
 }
 
-function NumberControl({
-  label,
-  value,
-  min,
-  max,
-  suffix,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  suffix: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="number-control">
-      <span className="number-control__meta">
-        <span>{label}</span>
-        <strong>
-          {value}
-          {suffix}
-        </strong>
-      </span>
-      <span className="number-control__field">
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={1}
-          value={value}
-          onChange={(event) => {
-            const nextValue = Number(event.currentTarget.value);
-
-            if (!Number.isFinite(nextValue)) {
-              return;
-            }
-
-            onChange(clamp(Math.round(nextValue), min, max));
-          }}
-        />
-        <span>{suffix}</span>
-      </span>
-    </label>
-  );
-}
-
 function ToggleControl({
   label,
   checked,
@@ -730,16 +766,6 @@ function LayoutEditor({
         suffix="px"
         onChange={(marginY) => onSettingsChange({ ...settings, marginY })}
       />
-      <NumberControl
-        label="暂隐时长"
-        value={settings.temporaryHideSeconds}
-        min={1}
-        max={60}
-        suffix="s"
-        onChange={(temporaryHideSeconds) =>
-          onSettingsChange({ ...settings, temporaryHideSeconds })
-        }
-      />
       <ToggleControl
         label="开机自启动"
         checked={launchAtStartup}
@@ -759,10 +785,24 @@ function LayoutEditor({
             }
           />
           <ColorControl
+            label="剩余待办"
+            value={settings.pendingTodoColor}
+            onChange={(pendingTodoColor) =>
+              onSettingsChange({ ...settings, pendingTodoColor })
+            }
+          />
+          <ColorControl
             label="岛屿背景"
             value={settings.islandBackgroundColor}
             onChange={(islandBackgroundColor) =>
               onSettingsChange({ ...settings, islandBackgroundColor })
+            }
+          />
+          <ColorControl
+            label="待办纸张"
+            value={settings.todoBackgroundColor}
+            onChange={(todoBackgroundColor) =>
+              onSettingsChange({ ...settings, todoBackgroundColor })
             }
           />
         </div>
@@ -785,7 +825,16 @@ function LayoutEditor({
         ) : (
           <div className="preset-list" role="list">
             {presets.map((preset) => (
-              <div className="preset-item" key={preset.id} role="listitem">
+              <div
+                className={[
+                  "preset-item",
+                  preset.isDefault ? "preset-item--default" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                key={preset.id}
+                role="listitem"
+              >
                 {editingPresetId === preset.id ? (
                   <input
                     className="preset-name-input"
@@ -811,8 +860,13 @@ function LayoutEditor({
                   <button
                     className="preset-name-button"
                     type="button"
-                    title="重命名预设"
-                    onClick={() => startPresetRename(preset)}
+                    title={preset.isDefault ? "默认预设" : "重命名预设"}
+                    disabled={preset.isDefault}
+                    onClick={() => {
+                      if (!preset.isDefault) {
+                        startPresetRename(preset);
+                      }
+                    }}
                   >
                     {preset.name}
                   </button>
@@ -824,15 +878,19 @@ function LayoutEditor({
                 >
                   启用
                 </button>
-                <button
-                  className="preset-delete-button"
-                  type="button"
-                  title="删除预设"
-                  aria-label={`删除 ${preset.name}`}
-                  onClick={() => onDeletePreset(preset.id)}
-                >
-                  <Trash2 size={13} strokeWidth={2.2} />
-                </button>
+                {preset.isDefault ? (
+                  <span className="preset-delete-spacer" aria-hidden="true" />
+                ) : (
+                  <button
+                    className="preset-delete-button"
+                    type="button"
+                    title="删除预设"
+                    aria-label={`删除 ${preset.name}`}
+                    onClick={() => onDeletePreset(preset.id)}
+                  >
+                    <Trash2 size={13} strokeWidth={2.2} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -894,6 +952,7 @@ function LayoutEditor({
 
 function TodoNotebook({
   todos,
+  dailyNote,
   draft,
   activeTodoId,
   currentDate,
@@ -910,11 +969,14 @@ function TodoNotebook({
   onDeleteTodo,
   onSaveToday,
   onShowArchive,
+  onShowDaily,
   onShowToday,
+  onDailyNoteChange,
   onArchiveLayoutChange,
   onSelectArchive,
 }: {
   todos: TodoItem[];
+  dailyNote: string;
   draft: string;
   activeTodoId: string | null;
   currentDate: string;
@@ -931,13 +993,18 @@ function TodoNotebook({
   onDeleteTodo: (id: string) => void;
   onSaveToday: () => void;
   onShowArchive: () => void;
+  onShowDaily: () => void;
   onShowToday: () => void;
+  onDailyNoteChange: (value: string) => void;
   onArchiveLayoutChange: (layout: ArchiveLayout) => void;
   onSelectArchive: (date: string) => void;
 }) {
-  const displayedTodos = pageMode === "review" ? selectedArchive?.todos ?? [] : todos;
+  const displayedTodos =
+    pageMode === "review" ? selectedArchive?.todos ?? [] : todos;
   const isTodayMode = pageMode === "today";
+  const isDailyMode = pageMode === "daily";
   const isArchiveMode = pageMode === "archive";
+  const isReviewMode = pageMode === "review";
   const openCount = displayedTodos.filter((todo) => !todo.completed).length;
   const listClassName = [
     "todo-list",
@@ -953,6 +1020,7 @@ function TodoNotebook({
     archiveLayout === "cards" ? "Notebook cards" : "Two-column timeline";
   const notebookClassName = [
     "todo-notebook",
+    isDailyMode ? "todo-notebook--daily" : "",
     isArchiveMode ? "todo-notebook--archive" : "",
     isArchiveMode ? `todo-notebook--archive-${archiveLayout}` : "",
   ]
@@ -992,7 +1060,7 @@ function TodoNotebook({
           className={[
             "todo-spine-button",
             "todo-spine-button--today",
-            pageMode === "today" ? "todo-spine-button--active" : "",
+            isTodayMode || isDailyMode ? "todo-spine-button--active" : "",
           ]
             .filter(Boolean)
             .join(" ")}
@@ -1040,10 +1108,40 @@ function TodoNotebook({
       </div>
 
       <div className="todo-notebook__topline">
-        <span className="todo-notebook__tab">
-          <ClipboardList size={15} strokeWidth={2.1} />
-          {pageMode === "review" ? selectedArchive?.date ?? "Review" : "Tasks"}
-        </span>
+        <div className="todo-notebook__title-group">
+          <span className="todo-notebook__tab">
+            {isDailyMode ? (
+              <NotebookPen size={15} strokeWidth={2.1} />
+            ) : (
+              <ClipboardList size={15} strokeWidth={2.1} />
+            )}
+            {isReviewMode
+              ? selectedArchive?.date ?? "Review"
+              : isDailyMode
+                ? "DAILY"
+                : "Tasks"}
+          </span>
+          {!isArchiveMode && !isReviewMode && (
+            <button
+              className={[
+                "todo-page-toggle",
+                isDailyMode ? "todo-page-toggle--active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              title={isDailyMode ? "Back to tasks" : "Open daily note"}
+              aria-label={isDailyMode ? "Back to tasks" : "Open daily note"}
+              onClick={isDailyMode ? onShowToday : onShowDaily}
+            >
+              {isDailyMode ? (
+                <ClipboardList size={14} strokeWidth={2.2} />
+              ) : (
+                <NotebookPen size={14} strokeWidth={2.2} />
+              )}
+            </button>
+          )}
+        </div>
         {isArchiveMode ? (
           <div className="archive-layout-toggle" aria-label={archiveTitle}>
             <button
@@ -1066,28 +1164,30 @@ function TodoNotebook({
             </button>
           </div>
         ) : (
-          <span>{openCount} open</span>
+          <span className="todo-notebook__open-count">{openCount} open</span>
         )}
       </div>
 
-      <form
-        className="todo-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (isTodayMode) {
-            onAddTodo();
-          }
-        }}
-      >
-        <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
-        <input
-          value={draft}
-          disabled={!isTodayMode}
-          placeholder={inputPlaceholder}
-          aria-label="Add a task, press Enter to save"
-          onChange={(event) => onDraftChange(event.currentTarget.value)}
-        />
-      </form>
+      {!isDailyMode && !isArchiveMode && (
+        <form
+          className="todo-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (isTodayMode) {
+              onAddTodo();
+            }
+          }}
+        >
+          <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
+          <input
+            value={draft}
+            disabled={!isTodayMode}
+            placeholder={inputPlaceholder}
+            aria-label="Add a task, press Enter to save"
+            onChange={(event) => onDraftChange(event.currentTarget.value)}
+          />
+        </form>
+      )}
 
       {isArchiveMode ? (
         <ArchiveBrowser
@@ -1095,11 +1195,20 @@ function TodoNotebook({
           layout={archiveLayout}
           onSelectArchive={onSelectArchive}
         />
+      ) : isDailyMode ? (
+        <textarea
+          className="daily-note"
+          value={dailyNote}
+          placeholder="Write today's notes..."
+          aria-label="Daily note"
+          spellCheck={false}
+          onChange={(event) => onDailyNoteChange(event.currentTarget.value)}
+        />
       ) : (
         <div className={listClassName} role="list">
           {displayedTodos.length === 0 ? (
             <div className="todo-empty">
-              {pageMode === "review" ? "Nothing was written here" : "今天还很轻"}
+              {isReviewMode ? "Nothing was written here" : "今天还很轻"}
             </div>
           ) : (
             displayedTodos.map((todo) => {
@@ -1174,7 +1283,9 @@ function TodoNotebook({
                   {isTodayMode && (
                     <>
                       <button
-                        className="todo-start"
+                        className={["todo-start", isActive ? "todo-start--active" : ""]
+                          .filter(Boolean)
+                          .join(" ")}
                         type="button"
                         title={isActive ? "结束" : "开始"}
                         aria-label={`${isActive ? "结束" : "开始"}：${todo.title}`}
@@ -1250,6 +1361,7 @@ function ArchiveBrowser({
     <div className="archive-cards" role="list" onWheel={handleHorizontalWheel}>
       {archives.map((archive) => {
         const previewTodos = archive.todos.slice(0, 3);
+        const dateParts = getDisplayDateParts(archive.date);
 
         return (
           <button
@@ -1259,7 +1371,15 @@ function ArchiveBrowser({
             role="listitem"
             onClick={() => onSelectArchive(archive.date)}
           >
-            <strong className="archive-card__date">{archive.date}</strong>
+            <span className="archive-card__eyebrow">TODAY</span>
+            <strong className="archive-card__date">
+              <span>{dateParts.year}</span>
+              <span>
+                {dateParts.month}
+                <em>/</em>
+                {dateParts.day}
+              </span>
+            </strong>
             <span className="archive-card__preview">
               {previewTodos.length > 0 ? (
                 previewTodos.map((todo) => (
@@ -1288,12 +1408,14 @@ function ArchiveBrowser({
 
 function App() {
   const [mode, setMode] = useState<IslandMode>("collapsed");
+  const [isTucked, setIsTucked] = useState(false);
   const [editor, setEditor] = useState<EditorMode>(null);
   const [settings, setSettings] = useState<IslandSettings>(loadSettings);
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
   const [settingPresets, setSettingPresets] =
     useState<IslandPreset[]>(loadSettingPresets);
   const [todos, setTodos] = useState<TodoItem[]>(loadTodos);
+  const [dailyNote, setDailyNote] = useState(loadDailyNote);
   const [draftTodo, setDraftTodo] = useState("");
   const [activeTodoId, setActiveTodoId] = useState<string | null>(
     loadActiveTodoId,
@@ -1320,6 +1442,8 @@ function App() {
         ? archives.length
         : todoPageMode === "review"
           ? getTodoVisualRows(selectedArchive?.todos ?? [])
+          : todoPageMode === "daily"
+            ? TODO_GROW_START_ROWS
           : getTodoVisualRows(todos),
       1,
     ),
@@ -1349,14 +1473,18 @@ function App() {
         "--island-scale": settings.sizeScale,
         "--expanded-island-height": `${expandedIslandHeight}px`,
         "--active-task-color": settings.taskTitleColor,
+        "--pending-todo-color": settings.pendingTodoColor,
         "--island-background-color": settings.islandBackgroundColor,
+        "--todo-background-color": settings.todoBackgroundColor,
       }) as CSSProperties,
     [
       expandedIslandHeight,
       settings.islandBackgroundColor,
       settings.opacity,
+      settings.pendingTodoColor,
       settings.sizeScale,
       settings.taskTitleColor,
+      settings.todoBackgroundColor,
     ],
   );
 
@@ -1419,12 +1547,14 @@ function App() {
       nextMode: IslandMode,
       nextSettings: IslandSettings,
       nextExpandedHeight: number,
+      nextIsTucked: boolean,
     ) => {
       try {
         await invoke("set_island_interaction", {
           mode: nextMode,
           sizeScale: nextSettings.sizeScale,
           expandedHeight: nextExpandedHeight,
+          isTucked: nextIsTucked,
         });
       } catch (error) {
         console.error("Failed to sync island interaction", error);
@@ -1441,22 +1571,22 @@ function App() {
     }
   }, []);
 
-  const temporarilyHideIsland = useCallback(async () => {
-    try {
-      await invoke("temporarily_hide_island", {
-        seconds: settings.temporaryHideSeconds,
-      });
-    } catch (error) {
-      console.error("Failed to temporarily hide island", error);
-    }
-  }, [settings.temporaryHideSeconds]);
-
   const setIslandMode = useCallback((nextMode: IslandMode) => {
     setMode(nextMode);
+    setIsTucked(false);
 
     if (nextMode === "collapsed") {
       setEditor(null);
     }
+  }, []);
+
+  const tuckIsland = useCallback(() => {
+    setIslandMode("collapsed");
+    setIsTucked(true);
+  }, [setIslandMode]);
+
+  const revealIsland = useCallback(() => {
+    setIsTucked(false);
   }, []);
 
   const toggleIsland = useCallback(() => {
@@ -1537,12 +1667,14 @@ function App() {
     (
       date: string,
       todoList: TodoItem[],
+      nextDailyNote: string,
       savedToDisk: boolean,
       filePath?: string,
     ) => {
       const archive: TodoArchive = {
         date,
         todos: todoList,
+        dailyNote: nextDailyNote,
         savedAt: Date.now(),
         savedToDisk,
         filePath,
@@ -1558,7 +1690,7 @@ function App() {
   );
 
   const saveTodosToDisk = useCallback(
-    async (date: string, todoList: TodoItem[]) => {
+    async (date: string, todoList: TodoItem[], nextDailyNote: string) => {
       const directory = saveDirectory.trim();
 
       if (!directory) {
@@ -1568,13 +1700,13 @@ function App() {
       const result = await invoke<SaveTodoResult>("save_todo_markdown", {
         directory,
         date,
-        content: formatTodosAsMarkdown(todoList),
+        content: formatTodoDocumentAsMarkdown(todoList, nextDailyNote),
       });
 
-      upsertArchive(date, todoList, true, result.filePath);
+      upsertArchive(date, todoList, nextDailyNote, true, result.filePath);
       window.localStorage.setItem(
         TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY,
-        getTodoSignature(date, todoList),
+        getTodoSignature(date, todoList, nextDailyNote),
       );
 
       return result;
@@ -1593,14 +1725,14 @@ function App() {
     setSaveState("saving");
 
     try {
-      await saveTodosToDisk(currentTodoDate, todos);
+      await saveTodosToDisk(currentTodoDate, todos, dailyNote);
       setSaveState("saved");
       window.setTimeout(() => setSaveState("idle"), 1200);
     } catch (error) {
       console.error("Failed to save todo markdown", error);
       setSaveState("error");
     }
-  }, [currentTodoDate, saveDirectory, saveTodosToDisk, todos]);
+  }, [currentTodoDate, dailyNote, saveDirectory, saveTodosToDisk, todos]);
 
   const saveDirectoryFromEditor = useCallback(() => {
     const nextDirectory = saveDirectoryDraft.trim();
@@ -1624,6 +1756,12 @@ function App() {
     setDraftTodo("");
   }, []);
 
+  const showDaily = useCallback(() => {
+    setTodoPageMode("daily");
+    setSelectedArchiveDate(null);
+    setDraftTodo("");
+  }, []);
+
   const selectArchive = useCallback(
     (date: string) => {
       if (date === currentTodoDate) {
@@ -1640,35 +1778,46 @@ function App() {
 
   const rolloverToToday = useCallback(
     async (nextDate: string) => {
-      const signature = getTodoSignature(currentTodoDate, todos);
+      const signature = getTodoSignature(currentTodoDate, todos, dailyNote);
       const lastSavedSignature = window.localStorage.getItem(
         TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY,
       );
 
-      if (todos.length > 0 && signature !== lastSavedSignature) {
+      if (
+        (todos.length > 0 || dailyNote.trim()) &&
+        signature !== lastSavedSignature
+      ) {
         if (saveDirectory.trim()) {
           try {
-            await saveTodosToDisk(currentTodoDate, todos);
+            await saveTodosToDisk(currentTodoDate, todos, dailyNote);
           } catch (error) {
             console.error("Failed to auto-save todo markdown", error);
-            upsertArchive(currentTodoDate, todos, false);
+            upsertArchive(currentTodoDate, todos, dailyNote, false);
           }
         } else {
-          upsertArchive(currentTodoDate, todos, false);
+          upsertArchive(currentTodoDate, todos, dailyNote, false);
         }
       }
 
       setTodos([]);
+      setDailyNote("");
       setActiveTodoId(null);
       setCurrentTodoDate(nextDate);
       setTodoPageMode("today");
       setSelectedArchiveDate(null);
       window.localStorage.setItem(
         TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY,
-        getTodoSignature(nextDate, []),
+        getTodoSignature(nextDate, [], ""),
       );
     },
-    [currentTodoDate, saveDirectory, saveTodosToDisk, todos, upsertArchive],
+    [
+      currentTodoDate,
+      dailyNote,
+      saveDirectory,
+      saveTodosToDisk,
+      todos,
+      upsertArchive,
+    ],
   );
 
   const resetSettings = useCallback(() => {
@@ -1678,14 +1827,18 @@ function App() {
 
   const saveSettingsPreset = useCallback(() => {
     setSettingPresets((currentPresets) => {
+      const customPresetCount = currentPresets.filter(
+        (preset) => !preset.isDefault && !isDefaultSettingPreset(preset.id),
+      ).length;
       const preset: IslandPreset = {
         id: createTodoId(),
-        name: `预设 ${currentPresets.length + 1}`,
+        name: `预设 ${customPresetCount + 1}`,
         settings,
         createdAt: Date.now(),
+        isDefault: false,
       };
 
-      return [preset, ...currentPresets].slice(0, MAX_SETTING_PRESETS);
+      return mergeWithDefaultSettingPresets([preset, ...currentPresets]);
     });
   }, [settings]);
 
@@ -1707,7 +1860,11 @@ function App() {
   const renameSettingsPreset = useCallback((presetId: string, name: string) => {
     const nextName = name.trim();
 
-    if (!nextName) {
+    if (
+      !nextName ||
+      isDefaultSettingPreset(presetId) ||
+      DEFAULT_SETTING_PRESETS.some((preset) => preset.name === nextName)
+    ) {
       return;
     }
 
@@ -1719,6 +1876,10 @@ function App() {
   }, []);
 
   const deleteSettingsPreset = useCallback((presetId: string) => {
+    if (isDefaultSettingPreset(presetId)) {
+      return;
+    }
+
     setSettingPresets((currentPresets) =>
       currentPresets.filter((preset) => preset.id !== presetId),
     );
@@ -1757,6 +1918,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(TODOS_STORAGE_KEY, JSON.stringify(todos));
   }, [todos]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DAILY_NOTE_STORAGE_KEY, dailyNote);
+  }, [dailyNote]);
 
   useEffect(() => {
     window.localStorage.setItem(TODO_DATE_STORAGE_KEY, currentTodoDate);
@@ -1819,9 +1984,10 @@ function App() {
   }, [settings.marginY, scheduleNativeLayout]);
 
   useEffect(() => {
-    void syncNativeInteraction(mode, settings, expandedIslandHeight);
+    void syncNativeInteraction(mode, settings, expandedIslandHeight, isTucked);
   }, [
     expandedIslandHeight,
+    isTucked,
     mode,
     settings.sizeScale,
     syncNativeInteraction,
@@ -1837,6 +2003,27 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [collapseIsland]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (!focused && mode === "expanded") {
+          collapseIsland();
+        }
+      })
+      .then((nextUnlisten) => {
+        unlisten = nextUnlisten;
+      })
+      .catch((error) => {
+        console.error("Failed to listen for island focus changes", error);
+      });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [collapseIsland, mode]);
 
   const activeTaskTitle = useMemo(() => {
     const activeTodo = todos.find(
@@ -1855,13 +2042,14 @@ function App() {
       <IslandShell
         mode={mode}
         editor={editor}
+        isTucked={isTucked}
         activeTaskTitle={activeTaskTitle}
         pendingTodoCount={openTodoCount}
-        temporaryHideSeconds={settings.temporaryHideSeconds}
         onToggle={toggleIsland}
         onCollapse={collapseIsland}
         onMinimize={minimizeIsland}
-        onTemporarilyHide={temporarilyHideIsland}
+        onTuck={tuckIsland}
+        onReveal={revealIsland}
         onEditorChange={setEditor}
       >
         {editor === "layout" && (
@@ -1886,6 +2074,7 @@ function App() {
         {editor === null && (
           <TodoNotebook
             todos={todos}
+            dailyNote={dailyNote}
             draft={draftTodo}
             activeTodoId={activeTodoId}
             currentDate={currentTodoDate}
@@ -1902,7 +2091,9 @@ function App() {
             onDeleteTodo={deleteTodo}
             onSaveToday={saveTodayTodos}
             onShowArchive={showArchive}
+            onShowDaily={showDaily}
             onShowToday={showToday}
+            onDailyNoteChange={setDailyNote}
             onArchiveLayoutChange={setArchiveLayout}
             onSelectArchive={selectArchive}
           />

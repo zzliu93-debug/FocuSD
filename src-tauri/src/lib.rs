@@ -26,8 +26,10 @@ const COLLAPSED_ISLAND_WIDTH: f64 = 320.0;
 const COLLAPSED_ISLAND_HEIGHT: f64 = 58.0;
 const EXPANDED_ISLAND_WIDTH: f64 = 560.0;
 const DEFAULT_EXPANDED_ISLAND_HEIGHT: f64 = 306.0;
+const EXPANDED_ISLAND_HEIGHT_RANGE: f64 = 240.0;
 const EXPANDED_RADIUS: f64 = 30.0;
 const STAGE_WINDOW_PADDING_Y: f64 = 24.0;
+const TUCKED_VISIBLE_EDGE_HEIGHT: f64 = 10.0;
 const STARTUP_REGISTRY_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const STARTUP_REGISTRY_VALUE: &str = "FocuSD Island";
 
@@ -66,6 +68,7 @@ impl IslandMode {
 #[derive(Clone, Copy)]
 struct IslandWindowState {
     mode: IslandMode,
+    is_tucked: bool,
     size_scale: f64,
     margin_y: f64,
     expanded_height: f64,
@@ -75,6 +78,7 @@ impl Default for IslandWindowState {
     fn default() -> Self {
         Self {
             mode: IslandMode::Collapsed,
+            is_tucked: false,
             size_scale: DEFAULT_SCALE,
             margin_y: DEFAULT_MARGIN_Y,
             expanded_height: DEFAULT_EXPANDED_ISLAND_HEIGHT,
@@ -112,16 +116,18 @@ fn set_island_interaction(
     mode: String,
     size_scale: f64,
     expanded_height: Option<f64>,
+    is_tucked: Option<bool>,
 ) -> Result<(), String> {
     let window = main_window(&app)?;
     let mode = IslandMode::from_value(&mode)?;
     let state = mutate_window_state(|state| {
         state.mode = mode;
+        state.is_tucked = is_tucked.unwrap_or(false);
         state.size_scale = size_scale.clamp(0.75, 1.4);
         if let Some(expanded_height) = expanded_height {
             state.expanded_height = expanded_height.clamp(
                 DEFAULT_EXPANDED_ISLAND_HEIGHT,
-                DEFAULT_EXPANDED_ISLAND_HEIGHT + 240.0,
+                DEFAULT_EXPANDED_ISLAND_HEIGHT + EXPANDED_ISLAND_HEIGHT_RANGE,
             );
         }
         *state
@@ -132,22 +138,6 @@ fn set_island_interaction(
 #[tauri::command]
 fn minimize_island(app: AppHandle) -> Result<(), String> {
     hide_island(&app);
-    Ok(())
-}
-
-#[tauri::command]
-fn temporarily_hide_island(app: AppHandle, seconds: u64) -> Result<(), String> {
-    let seconds = seconds.clamp(1, 60);
-
-    hide_island(&app);
-
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(seconds));
-        if let Ok(window) = main_window(&app) {
-            let _ = window.show();
-        }
-    });
-
     Ok(())
 }
 
@@ -285,7 +275,13 @@ fn apply_stage_geometry(window: &WebviewWindow, state: IslandWindowState) -> Res
     let monitor_position = monitor.position();
     let monitor_size = monitor.size();
     let physical_width = (STAGE_WINDOW_WIDTH * scale).round() as i32;
-    let physical_top_offset = (state.margin_y * scale).round() as i32;
+    let physical_top_offset = if matches!(state.mode, IslandMode::Collapsed) && state.is_tucked {
+        -((COLLAPSED_ISLAND_HEIGHT * state.size_scale - TUCKED_VISIBLE_EDGE_HEIGHT).max(0.0)
+            * scale)
+            .round() as i32
+    } else {
+        (state.margin_y * scale).round() as i32
+    };
     let x = monitor_position.x + ((monitor_size.width as i32 - physical_width) / 2);
     let y = monitor_position.y + physical_top_offset;
 
@@ -447,7 +443,6 @@ pub fn run() {
             set_island_interaction,
             save_todo_markdown,
             minimize_island,
-            temporarily_hide_island,
             get_launch_at_startup,
             set_launch_at_startup
         ])
