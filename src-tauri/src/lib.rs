@@ -1,3 +1,5 @@
+mod clipboard_history;
+
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -14,10 +16,10 @@ use tauri::{
 };
 use windows::Win32::{
     Foundation::{POINT, RECT, RPC_E_CHANGED_MODE},
+    Media::Audio::Endpoints::IAudioMeterInformation,
     Media::Audio::{
         eCommunications, eConsole, eMultimedia, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
     },
-    Media::Audio::Endpoints::IAudioMeterInformation,
     System::Com::{
         CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
     },
@@ -293,7 +295,12 @@ fn read_media_state() -> MediaState {
         available: audio_active,
         audio_active,
         audio_peak,
-        playback_status: if audio_active { "playing" } else { "unavailable" }.to_string(),
+        playback_status: if audio_active {
+            "playing"
+        } else {
+            "unavailable"
+        }
+        .to_string(),
         updated_at: current_unix_millis(),
     }
 }
@@ -595,6 +602,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             build_tray(app)?;
+            if let Err(error) = clipboard_history::init(app.handle()) {
+                eprintln!("failed to initialize clipboard history: {error}");
+            }
             if let Ok(window) = main_window(app.handle()) {
                 if let Err(error) = apply_stage_geometry(&window, IslandWindowState::default()) {
                     eprintln!("failed to size and position island window: {error}");
@@ -617,7 +627,12 @@ pub fn run() {
             get_audio_level,
             media_play_pause,
             media_next,
-            media_previous
+            media_previous,
+            clipboard_history::get_clipboard_history,
+            clipboard_history::set_clipboard_history_settings,
+            clipboard_history::copy_clipboard_history_item,
+            clipboard_history::delete_clipboard_history_item,
+            clipboard_history::clear_clipboard_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running FocuSD Island");

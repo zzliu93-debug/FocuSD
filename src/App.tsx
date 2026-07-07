@@ -14,6 +14,8 @@ import {
   CircleDot,
   ClipboardList,
   Columns2,
+  Copy,
+  ImageIcon,
   Minus,
   NotebookPen,
   Pause,
@@ -21,17 +23,20 @@ import {
   Plus,
   RefreshCcw,
   Save,
+  Search,
   SkipBack,
   SkipForward,
   Trash2,
+  X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
 export type IslandMode = "collapsed" | "expanded";
 
-type IslandPage = "todo" | "music" | "layout";
+type IslandPage = "todo" | "music" | "clipboard" | "layout";
 type TodoPageMode = "today" | "daily" | "archive" | "review";
 type ArchiveLayout = "cards" | "timeline";
 type MediaPlaybackStatus = "unavailable" | "playing" | "paused";
@@ -65,6 +70,37 @@ type MediaState = {
   audioPeak: number;
   playbackStatus: MediaPlaybackStatus;
   updatedAt: number;
+};
+
+type ClipboardHistorySettings = {
+  enabled: boolean;
+  captureImages: boolean;
+  maxItems: number;
+};
+
+type ClipboardHistoryImage = {
+  width: number;
+  height: number;
+  byteSize: number;
+  originalPath: string;
+  thumbnailPath: string;
+  thumbnailDataUrl?: string;
+};
+
+type ClipboardHistoryItem = {
+  id: string;
+  kind: "text" | "image";
+  hash: string;
+  createdAt: number;
+  copiedAt: number;
+  preview: string;
+  text?: string;
+  image?: ClipboardHistoryImage;
+};
+
+type ClipboardHistorySnapshot = {
+  settings: ClipboardHistorySettings;
+  items: ClipboardHistoryItem[];
 };
 
 type AudioLevel = {
@@ -122,6 +158,7 @@ const TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY =
   "focusd-island-last-saved-signature";
 const BASE_EXPANDED_ISLAND_HEIGHT = 306;
 const MUSIC_EXPANDED_ISLAND_HEIGHT = 286;
+const CLIPBOARD_EXPANDED_ISLAND_HEIGHT = 430;
 const EDITOR_EXPANDED_ISLAND_HEIGHT = 430;
 const TODO_ROW_HEIGHT = 46;
 const TODO_TITLE_CHARACTERS_PER_LINE = 32;
@@ -138,12 +175,20 @@ const DEFAULT_MEDIA_STATE: MediaState = {
   playbackStatus: "unavailable",
   updatedAt: 0,
 };
+const DEFAULT_CLIPBOARD_HISTORY: ClipboardHistorySnapshot = {
+  settings: {
+    enabled: true,
+    captureImages: true,
+    maxItems: 30,
+  },
+  items: [],
+};
 const DEFAULT_SETTINGS: IslandSettings = {
   opacity: 95,
   sizeScale: 1,
   marginY: 31,
   taskTextColor: DEFAULT_TASK_TEXT_COLOR,
-  pulseColor: "#49e18f",
+  pulseColor: "#ff8f70",
   pulseBrightness: 100,
   islandBackgroundColor: "#101013",
   todoBackgroundColor: "#ffffff",
@@ -586,6 +631,18 @@ function IslandShell({
               }}
             />
             <button
+              className={`dot-button dot-button--clipboard ${
+                page === "clipboard" ? "dot-button--active" : ""
+              }`}
+              type="button"
+              title="剪贴板历史"
+              aria-label="剪贴板历史"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPageChange("clipboard");
+              }}
+            />
+            <button
               className={`dot-button dot-button--layout ${
                 page === "layout" ? "dot-button--active" : ""
               }`}
@@ -807,14 +864,49 @@ function ToggleControl({
   );
 }
 
+function NumberControl({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="number-control">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => {
+          const nextValue = Number(event.currentTarget.value);
+
+          if (Number.isFinite(nextValue)) {
+            onChange(clamp(Math.round(nextValue), min, max));
+          }
+        }}
+      />
+    </label>
+  );
+}
+
 function LayoutEditor({
   settings,
+  clipboardSettings,
   saveDirectoryDraft,
   savePathState,
   highlightSavePath,
   presets,
   launchAtStartup,
   onSettingsChange,
+  onClipboardSettingsChange,
   onReset,
   onSaveDirectoryDraftChange,
   onSaveDirectory,
@@ -825,12 +917,14 @@ function LayoutEditor({
   onLaunchAtStartupChange,
 }: {
   settings: IslandSettings;
+  clipboardSettings: ClipboardHistorySettings;
   saveDirectoryDraft: string;
   savePathState: SavePathState;
   highlightSavePath: boolean;
   presets: IslandPreset[];
   launchAtStartup: boolean;
   onSettingsChange: (settings: IslandSettings) => void;
+  onClipboardSettingsChange: (settings: ClipboardHistorySettings) => void;
   onReset: () => void;
   onSaveDirectoryDraftChange: (value: string) => void;
   onSaveDirectory: () => void;
@@ -932,6 +1026,35 @@ function LayoutEditor({
         checked={settings.showTitle}
         onChange={(showTitle) => onSettingsChange({ ...settings, showTitle })}
       />
+
+      <div className="clipboard-settings-panel">
+        <div className="clipboard-settings-panel__header">
+          <span>剪贴板历史</span>
+        </div>
+        <ToggleControl
+          label="记录剪贴板"
+          checked={clipboardSettings.enabled}
+          onChange={(enabled) =>
+            onClipboardSettingsChange({ ...clipboardSettings, enabled })
+          }
+        />
+        <ToggleControl
+          label="记录图片"
+          checked={clipboardSettings.captureImages}
+          onChange={(captureImages) =>
+            onClipboardSettingsChange({ ...clipboardSettings, captureImages })
+          }
+        />
+        <NumberControl
+          label="最大历史条数"
+          value={clipboardSettings.maxItems}
+          min={5}
+          max={200}
+          onChange={(maxItems) =>
+            onClipboardSettingsChange({ ...clipboardSettings, maxItems })
+          }
+        />
+      </div>
 
       <div className="color-panel">
         <div className="color-panel__header">
@@ -1730,6 +1853,176 @@ function MusicLevelWave({
   );
 }
 
+function ClipboardHistoryPanel({
+  snapshot,
+  onCopyItem,
+  onDeleteItem,
+  onClear,
+}: {
+  snapshot: ClipboardHistorySnapshot;
+  onCopyItem: (id: string) => void;
+  onDeleteItem: (id: string) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredItems = useMemo(() => {
+    if (!normalizedQuery) {
+      return snapshot.items;
+    }
+
+    return snapshot.items.filter((item) => {
+      const haystack = [
+        item.kind === "image" ? "图片 image" : "文本 text",
+        item.preview,
+        item.text ?? "",
+        formatClipboardTime(item.copiedAt),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+  }, [normalizedQuery, snapshot.items]);
+
+  return (
+    <section className="clipboard-panel" aria-label="剪贴板历史">
+      <header className="clipboard-panel__header">
+        <div className="clipboard-panel__title">
+          <ClipboardList size={16} strokeWidth={2.2} />
+          <span>剪贴板历史</span>
+          <strong>{snapshot.items.length}</strong>
+        </div>
+        <button
+          className="clipboard-clear-button"
+          type="button"
+          disabled={snapshot.items.length === 0}
+          onClick={onClear}
+        >
+          清空
+        </button>
+      </header>
+
+      <label className="clipboard-search">
+        <Search size={15} strokeWidth={2.2} />
+        <input
+          value={query}
+          placeholder="搜索文本、时间或图片"
+          aria-label="搜索剪贴板历史"
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        {query && (
+          <button
+            type="button"
+            title="清除搜索"
+            aria-label="清除搜索"
+            onClick={() => setQuery("")}
+          >
+            <X size={14} strokeWidth={2.4} />
+          </button>
+        )}
+      </label>
+
+      <div className="clipboard-list" role="list">
+        {filteredItems.length === 0 ? (
+          <div className="clipboard-empty">
+            {snapshot.items.length === 0 ? "复制文本或图片后会出现在这里" : "没有匹配的剪贴记录"}
+          </div>
+        ) : (
+          filteredItems.map((item) => (
+            <article className="clipboard-item" key={item.id} role="listitem">
+              <button
+                className="clipboard-item__main"
+                type="button"
+                title="复制回剪贴板"
+                onClick={() => onCopyItem(item.id)}
+              >
+                {item.kind === "image" ? (
+                  <span className="clipboard-item__thumb">
+                    {item.image?.thumbnailDataUrl ? (
+                      <img src={item.image.thumbnailDataUrl} alt="" />
+                    ) : (
+                      <ImageIcon size={20} strokeWidth={2.1} />
+                    )}
+                  </span>
+                ) : (
+                  <span className="clipboard-item__text-icon">
+                    <ClipboardList size={17} strokeWidth={2.1} />
+                  </span>
+                )}
+                <span className="clipboard-item__body">
+                  <span className="clipboard-item__meta">
+                    <span>{item.kind === "image" ? "图片" : "文本"}</span>
+                    <time>{formatClipboardTime(item.copiedAt)}</time>
+                    {item.image && (
+                      <span>
+                        {item.image.width} x {item.image.height}
+                      </span>
+                    )}
+                    {item.image && <span>{formatBytes(item.image.byteSize)}</span>}
+                  </span>
+                  <span className="clipboard-item__preview">{item.preview}</span>
+                </span>
+              </button>
+              <div className="clipboard-item__actions">
+                <button
+                  type="button"
+                  title="复制"
+                  aria-label="复制回剪贴板"
+                  onClick={() => onCopyItem(item.id)}
+                >
+                  <Copy size={14} strokeWidth={2.3} />
+                </button>
+                <button
+                  type="button"
+                  title="删除"
+                  aria-label="删除剪贴记录"
+                  onClick={() => onDeleteItem(item.id)}
+                >
+                  <Trash2 size={14} strokeWidth={2.3} />
+                </button>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatClipboardTime(timestamp: number) {
+  if (!timestamp) {
+    return "--:--";
+  }
+
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+
+  const today = getLocalDateString();
+  const itemDate = getLocalDateString(date);
+  const time = date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return itemDate === today ? time : `${itemDate} ${time}`;
+}
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 KB";
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function App() {
   const [mode, setMode] = useState<IslandMode>("collapsed");
   const [isTucked, setIsTucked] = useState(false);
@@ -1760,6 +2053,8 @@ function App() {
     useState(loadSaveDirectory);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savePathState, setSavePathState] = useState<SavePathState>("idle");
+  const [clipboardHistory, setClipboardHistory] =
+    useState<ClipboardHistorySnapshot>(DEFAULT_CLIPBOARD_HISTORY);
   const didCheckDate = useRef(false);
   const selectedArchive =
     archives.find((archive) => archive.date === selectedArchiveDate) ?? null;
@@ -1782,7 +2077,9 @@ function App() {
         Math.max(0, visibleTodoRows - TODO_GROW_START_ROWS) * TODO_ROW_HEIGHT
       : page === "music"
         ? MUSIC_EXPANDED_ISLAND_HEIGHT
-        : EDITOR_EXPANDED_ISLAND_HEIGHT;
+        : page === "clipboard"
+          ? CLIPBOARD_EXPANDED_ISLAND_HEIGHT
+          : EDITOR_EXPANDED_ISLAND_HEIGHT;
   const layoutSync = useRef<{
     frame: number | null;
     inFlight: boolean;
@@ -1894,6 +2191,78 @@ function App() {
     },
     [],
   );
+
+  const refreshClipboardHistory = useCallback(async () => {
+    try {
+      const snapshot = await invoke<ClipboardHistorySnapshot>(
+        "get_clipboard_history",
+      );
+      setClipboardHistory(snapshot);
+    } catch (error) {
+      console.error("Failed to read clipboard history", error);
+    }
+  }, []);
+
+  const updateClipboardSettings = useCallback(
+    async (nextSettings: ClipboardHistorySettings) => {
+      const normalizedSettings = {
+        ...nextSettings,
+        maxItems: clamp(Math.round(nextSettings.maxItems), 5, 200),
+      };
+
+      setClipboardHistory((currentHistory) => ({
+        ...currentHistory,
+        settings: normalizedSettings,
+      }));
+
+      try {
+        const snapshot = await invoke<ClipboardHistorySnapshot>(
+          "set_clipboard_history_settings",
+          { settings: normalizedSettings },
+        );
+        setClipboardHistory(snapshot);
+      } catch (error) {
+        console.error("Failed to update clipboard history settings", error);
+        void refreshClipboardHistory();
+      }
+    },
+    [refreshClipboardHistory],
+  );
+
+  const copyClipboardHistoryItem = useCallback(async (id: string) => {
+    try {
+      const snapshot = await invoke<ClipboardHistorySnapshot>(
+        "copy_clipboard_history_item",
+        { id },
+      );
+      setClipboardHistory(snapshot);
+    } catch (error) {
+      console.error("Failed to copy clipboard history item", error);
+    }
+  }, []);
+
+  const deleteClipboardHistoryItem = useCallback(async (id: string) => {
+    try {
+      const snapshot = await invoke<ClipboardHistorySnapshot>(
+        "delete_clipboard_history_item",
+        { id },
+      );
+      setClipboardHistory(snapshot);
+    } catch (error) {
+      console.error("Failed to delete clipboard history item", error);
+    }
+  }, []);
+
+  const clearClipboardHistoryItems = useCallback(async () => {
+    try {
+      const snapshot = await invoke<ClipboardHistorySnapshot>(
+        "clear_clipboard_history",
+      );
+      setClipboardHistory(snapshot);
+    } catch (error) {
+      console.error("Failed to clear clipboard history", error);
+    }
+  }, []);
 
   const minimizeIsland = useCallback(async () => {
     try {
@@ -2371,6 +2740,26 @@ function App() {
   }, []);
 
   useEffect(() => {
+    void refreshClipboardHistory();
+
+    let unlisten: (() => void) | null = null;
+
+    void listen("clipboard-history-changed", () => {
+      void refreshClipboardHistory();
+    })
+      .then((nextUnlisten) => {
+        unlisten = nextUnlisten;
+      })
+      .catch((error) => {
+        console.error("Failed to listen for clipboard history changes", error);
+      });
+
+    return () => {
+      unlisten?.();
+    };
+  }, [refreshClipboardHistory]);
+
+  useEffect(() => {
     void refreshMediaState();
 
     const interval = window.setInterval(() => {
@@ -2533,12 +2922,14 @@ function App() {
         {page === "layout" && (
           <LayoutEditor
             settings={settings}
+            clipboardSettings={clipboardHistory.settings}
             saveDirectoryDraft={saveDirectoryDraft}
             savePathState={savePathState}
             highlightSavePath={saveState === "needs-path"}
             presets={settingPresets}
             launchAtStartup={launchAtStartup}
             onSettingsChange={setSettings}
+            onClipboardSettingsChange={updateClipboardSettings}
             onReset={resetSettings}
             onSaveDirectoryDraftChange={setSaveDirectoryDraft}
             onSaveDirectory={saveDirectoryFromEditor}
@@ -2555,6 +2946,14 @@ function App() {
             onPlayPause={() => void runMediaCommand("media_play_pause")}
             onNext={() => void runMediaCommand("media_next")}
             onPrevious={() => void runMediaCommand("media_previous")}
+          />
+        )}
+        {page === "clipboard" && (
+          <ClipboardHistoryPanel
+            snapshot={clipboardHistory}
+            onCopyItem={(id) => void copyClipboardHistoryItem(id)}
+            onDeleteItem={(id) => void deleteClipboardHistoryItem(id)}
+            onClear={() => void clearClipboardHistoryItems()}
           />
         )}
         {page === "todo" && (
