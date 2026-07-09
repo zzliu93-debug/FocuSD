@@ -43,6 +43,8 @@ type IslandPage = "todo" | "music" | "clipboard" | "layout";
 type TodoPageMode = "today" | "daily" | "archive" | "review";
 type ArchiveLayout = "cards" | "timeline";
 type MediaPlaybackStatus = "unavailable" | "playing" | "paused";
+type AgentProvider = "codex" | "claudeCode";
+type AgentTaskPhase = "idle" | "running" | "completed" | "failed";
 
 type TodoItem = {
   id: string;
@@ -113,6 +115,17 @@ type AudioLevel = {
   updatedAt: number;
 };
 
+type AgentTaskStatus = {
+  phase: AgentTaskPhase;
+  taskId?: string;
+  updatedAt: number;
+};
+
+type AgentStatusSnapshot = Record<AgentProvider, AgentTaskStatus> & {
+  updatedAt: number;
+  statusPath: string;
+};
+
 type IslandSettings = {
   opacity: number;
   sizeScale: number;
@@ -141,6 +154,7 @@ type IslandShellProps = {
   activeTaskTitle: string | null;
   pendingTodoCount: number;
   mediaState: MediaState;
+  isAgentRunning: boolean;
   onOpenPage: (page: IslandPage) => void;
   onCollapse: () => void;
   onMinimize: () => void;
@@ -179,6 +193,16 @@ const DEFAULT_MEDIA_STATE: MediaState = {
   audioPeak: 0,
   playbackStatus: "unavailable",
   updatedAt: 0,
+};
+const DEFAULT_AGENT_TASK_STATUS: AgentTaskStatus = {
+  phase: "idle",
+  updatedAt: 0,
+};
+const DEFAULT_AGENT_STATUS: AgentStatusSnapshot = {
+  codex: DEFAULT_AGENT_TASK_STATUS,
+  claudeCode: DEFAULT_AGENT_TASK_STATUS,
+  updatedAt: 0,
+  statusPath: "",
 };
 const DEFAULT_CLIPBOARD_HISTORY: ClipboardHistorySnapshot = {
   settings: {
@@ -679,6 +703,7 @@ function IslandShell({
   activeTaskTitle,
   pendingTodoCount,
   mediaState,
+  isAgentRunning,
   onOpenPage,
   onCollapse,
   onMinimize,
@@ -699,6 +724,18 @@ function IslandShell({
   ]
     .filter(Boolean)
     .join(" ");
+  const pulseClassName = [
+    "island__pulse",
+    isAgentRunning
+      ? "island__pulse--agent-running"
+      : "island__pulse--agent-idle",
+  ].join(" ");
+  const agentStatusIconClassName = [
+    "island__agent-status-icon",
+    isAgentRunning
+      ? "island__agent-status-icon--running"
+      : "island__agent-status-icon--idle",
+  ].join(" ");
   const collapsedLabel = activeTaskTitle
     ? `正在专注：${activeTaskTitle}`
     : "FocuSD Island";
@@ -719,7 +756,7 @@ function IslandShell({
       }}
     >
       <div className="island__collapsed" aria-hidden={isExpanded}>
-        <span className="island__pulse" />
+        <span className={pulseClassName} />
         {showTitle && <span className="island__brand">FocuSD</span>}
         {activeTaskTitle ? (
           <span className="island__active-task">
@@ -754,7 +791,11 @@ function IslandShell({
       <div className="island__expanded" aria-hidden={!isExpanded}>
         <header className="island__header">
           <div className="island__title">
-            <CircleDot size={16} strokeWidth={2.2} />
+            <CircleDot
+              className={agentStatusIconClassName}
+              size={16}
+              strokeWidth={2.2}
+            />
             <span>FocuSD</span>
           </div>
 
@@ -2496,6 +2537,9 @@ function App() {
   const [page, setPage] = useState<IslandPage>("todo");
   const [mediaState, setMediaState] =
     useState<MediaState>(DEFAULT_MEDIA_STATE);
+  const [agentStatus, setAgentStatus] =
+    useState<AgentStatusSnapshot>(DEFAULT_AGENT_STATUS);
+  const isRefreshingAgentStatus = useRef(false);
   const mediaStatusLockUntil = useRef(0);
   const [settings, setSettings] = useState<IslandSettings>(loadSettings);
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
@@ -2686,6 +2730,23 @@ function App() {
       setClipboardHistory(snapshot);
     } catch (error) {
       console.error("Failed to read clipboard history", error);
+    }
+  }, []);
+
+  const refreshAgentStatus = useCallback(async () => {
+    if (isRefreshingAgentStatus.current) {
+      return;
+    }
+
+    isRefreshingAgentStatus.current = true;
+    try {
+      const snapshot = await invoke<AgentStatusSnapshot>("get_agent_status");
+      setAgentStatus(snapshot);
+    } catch (error) {
+      console.error("Failed to read agent status", error);
+      setAgentStatus(DEFAULT_AGENT_STATUS);
+    } finally {
+      isRefreshingAgentStatus.current = false;
     }
   }, []);
 
@@ -3286,6 +3347,16 @@ function App() {
   }, [refreshMediaState]);
 
   useEffect(() => {
+    void refreshAgentStatus();
+
+    const interval = window.setInterval(() => {
+      void refreshAgentStatus();
+    }, 200);
+
+    return () => window.clearInterval(interval);
+  }, [refreshAgentStatus]);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
@@ -3432,6 +3503,12 @@ function App() {
     () => todos.filter((todo) => !todo.completed).length,
     [todos],
   );
+  const isAgentRunning = useMemo(
+    () =>
+      agentStatus.codex.phase === "running" ||
+      agentStatus.claudeCode.phase === "running",
+    [agentStatus],
+  );
 
   return (
     <main className="stage" style={stageStyle}>
@@ -3443,6 +3520,7 @@ function App() {
         activeTaskTitle={activeTaskTitle}
         pendingTodoCount={openTodoCount}
         mediaState={mediaState}
+        isAgentRunning={isAgentRunning}
         onOpenPage={openIslandPage}
         onCollapse={collapseIsland}
         onMinimize={minimizeIsland}

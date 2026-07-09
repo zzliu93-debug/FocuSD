@@ -143,6 +143,32 @@ input {
   filter: brightness(var(--island-pulse-brightness));
 }
 
+.island__pulse--agent-idle {
+  background: #35e985;
+  box-shadow: 0 0 14px rgba(53, 233, 133, 0.72);
+}
+
+.island__pulse--agent-running {
+  background: #ff4d5e;
+  box-shadow: 0 0 14px rgba(255, 77, 94, 0.72);
+}
+
+.island__agent-status-icon {
+  flex: 0 0 auto;
+  filter: brightness(var(--island-pulse-brightness));
+  transition:
+    color 160ms ease,
+    filter 160ms ease;
+}
+
+.island__agent-status-icon--idle {
+  color: #35e985;
+}
+
+.island__agent-status-icon--running {
+  color: #ff4d5e;
+}
+
 .island--title-hidden .island__collapsed {
   gap: 10px;
 }

@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs,
     os::windows::process::CommandExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     sync::{Mutex, OnceLock},
     thread,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     menu::{Menu, MenuItem},
@@ -50,6 +50,11 @@ const STARTUP_REGISTRY_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVers
 const STARTUP_REGISTRY_VALUE: &str = "FocuSD Island";
 const AUDIO_ACTIVE_THRESHOLD: f32 = 0.000015;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+const AGENT_STATUS_FILE_NAME: &str = "agent-status.json";
+const CODEX_RUNNING_MARKER_FILE_NAME: &str = "agent-codex-running.flag";
+const CODEX_RUNNING_HOLD_FILE_NAME: &str = "agent-codex-running-hold.flag";
+const CLAUDE_CODE_RUNNING_MARKER_FILE_NAME: &str = "agent-claudeCode-running.flag";
+const CLAUDE_CODE_RUNNING_HOLD_FILE_NAME: &str = "agent-claudeCode-running-hold.flag";
 
 static WINDOW_STATE: OnceLock<Mutex<IslandWindowState>> = OnceLock::new();
 
@@ -137,6 +142,51 @@ impl Default for MediaState {
             updated_at: current_unix_millis(),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentTaskStatus {
+    #[serde(default = "default_agent_phase")]
+    phase: String,
+    #[serde(default)]
+    task_id: Option<String>,
+    #[serde(default)]
+    updated_at: i64,
+}
+
+impl Default for AgentTaskStatus {
+    fn default() -> Self {
+        Self {
+            phase: default_agent_phase(),
+            task_id: None,
+            updated_at: 0,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedAgentStatus {
+    #[serde(default)]
+    codex: AgentTaskStatus,
+    #[serde(default)]
+    claude_code: AgentTaskStatus,
+    #[serde(default)]
+    updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentStatusSnapshot {
+    codex: AgentTaskStatus,
+    claude_code: AgentTaskStatus,
+    updated_at: i64,
+    status_path: String,
+}
+
+fn default_agent_phase() -> String {
+    "idle".to_string()
 }
 
 #[tauri::command]
@@ -274,6 +324,29 @@ fn save_todo_markdown(
 }
 
 #[tauri::command]
+fn get_agent_status(app: AppHandle) -> Result<AgentStatusSnapshot, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Failed to resolve app data directory: {error}"))?;
+    fs::create_dir_all(&app_dir)
+        .map_err(|error| format!("Failed to create app data directory: {error}"))?;
+
+    let status_path = app_dir.join(AGENT_STATUS_FILE_NAME);
+    let status_path_display = status_path.to_string_lossy().to_string();
+    let mut snapshot = match fs::read_to_string(&status_path) {
+        Ok(content) => match serde_json::from_str::<PersistedAgentStatus>(&content) {
+            Ok(persisted) => agent_status_snapshot_from_persisted(persisted, status_path_display),
+            Err(_) => default_agent_status_snapshot(status_path_display),
+        },
+        Err(_) => default_agent_status_snapshot(status_path_display),
+    };
+    apply_agent_running_markers(&app_dir, &mut snapshot);
+
+    Ok(snapshot)
+}
+
+#[tauri::command]
 fn get_media_state() -> MediaState {
     read_media_state()
 }
@@ -320,6 +393,88 @@ fn read_media_state() -> MediaState {
         .to_string(),
         updated_at: current_unix_millis(),
     }
+}
+
+fn default_agent_status_snapshot(status_path: String) -> AgentStatusSnapshot {
+    AgentStatusSnapshot {
+        codex: AgentTaskStatus::default(),
+        claude_code: AgentTaskStatus::default(),
+        updated_at: current_unix_millis(),
+        status_path,
+    }
+}
+
+fn agent_status_snapshot_from_persisted(
+    persisted: PersistedAgentStatus,
+    status_path: String,
+) -> AgentStatusSnapshot {
+    AgentStatusSnapshot {
+        codex: normalize_agent_task_status(persisted.codex),
+        claude_code: normalize_agent_task_status(persisted.claude_code),
+        updated_at: if persisted.updated_at > 0 {
+            persisted.updated_at
+        } else {
+            current_unix_millis()
+        },
+        status_path,
+    }
+}
+
+fn apply_agent_running_markers(app_dir: &Path, snapshot: &mut AgentStatusSnapshot) {
+    let now = current_unix_millis();
+
+    if let Some(updated_at) = active_agent_running_marker_time(
+        app_dir,
+        CODEX_RUNNING_MARKER_FILE_NAME,
+        CODEX_RUNNING_HOLD_FILE_NAME,
+        now,
+    ) {
+        snapshot.codex.phase = "running".to_string();
+        snapshot.codex.updated_at = updated_at;
+    }
+
+    if let Some(updated_at) = active_agent_running_marker_time(
+        app_dir,
+        CLAUDE_CODE_RUNNING_MARKER_FILE_NAME,
+        CLAUDE_CODE_RUNNING_HOLD_FILE_NAME,
+        now,
+    ) {
+        snapshot.claude_code.phase = "running".to_string();
+        snapshot.claude_code.updated_at = updated_at;
+    }
+}
+
+fn active_agent_running_marker_time(
+    app_dir: &Path,
+    running_file_name: &str,
+    hold_file_name: &str,
+    now: i64,
+) -> Option<i64> {
+    let running_path = app_dir.join(running_file_name);
+    if running_path.is_file() {
+        return Some(file_modified_unix_millis(&running_path).unwrap_or(now));
+    }
+
+    let hold_path = app_dir.join(hold_file_name);
+    let visible_until = fs::read_to_string(hold_path)
+        .ok()
+        .and_then(|content| content.trim().parse::<i64>().ok())?;
+    if visible_until > now {
+        Some(now)
+    } else {
+        None
+    }
+}
+
+fn normalize_agent_task_status(mut status: AgentTaskStatus) -> AgentTaskStatus {
+    if !matches!(
+        status.phase.as_str(),
+        "idle" | "running" | "completed" | "failed"
+    ) {
+        status.phase = default_agent_phase();
+    }
+
+    status
 }
 
 fn read_system_audio_peak_window(samples: usize, delay: Duration) -> Result<f32, String> {
@@ -397,13 +552,19 @@ fn send_media_key(key: VIRTUAL_KEY) {
     }
 }
 
-fn current_unix_millis() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
+fn file_modified_unix_millis(path: &Path) -> Option<i64> {
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    system_time_to_unix_millis(modified)
+}
 
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
+fn current_unix_millis() -> i64 {
+    system_time_to_unix_millis(SystemTime::now()).unwrap_or_default()
+}
+
+fn system_time_to_unix_millis(time: SystemTime) -> Option<i64> {
+    time.duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
-        .unwrap_or_default()
+        .ok()
 }
 
 fn media_error(error: windows::core::Error) -> String {
@@ -638,6 +799,7 @@ pub fn run() {
             minimize_island,
             get_launch_at_startup,
             set_launch_at_startup,
+            get_agent_status,
             get_media_state,
             get_audio_level,
             media_play_pause,
