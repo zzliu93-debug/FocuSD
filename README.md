@@ -1,31 +1,99 @@
 # FocuSD Island
 
-> 一个 Windows 优先的 Tauri + React 桌面悬浮岛，用来把当天最重要的任务放在屏幕顶部。
+> 一个 Windows 优先的 Tauri + React 桌面悬浮岛，把当天最重要的任务、笔记、Codex任务状态、历史剪贴板和媒体控制放在屏幕顶部。
 
 语言：中文 | [English](#english)
 
 ## 项目简介
 
-FocuSD Island 是一个轻量的桌面效率工具。它以透明、无边框、置顶的「悬浮岛」形式停靠在主显示器顶部，默认保持紧凑胶囊形态；展开后可以管理当天待办、记录日记、保存 Markdown 归档，并调整悬浮岛的外观和位置。
+FocuSD Island 是一个轻量级桌面效率工具。它以透明、无边框、始终置顶的「悬浮岛」形式停靠在主显示器顶部，默认是紧凑胶囊形态，展开后可以查看Codex状态指示灯、管理今日待办、记录每日笔记、回顾归档、查看剪贴板历史、控制媒体播放，并调整悬浮岛的外观与位置。
 
-这个项目当前处于早期 MVP 阶段，主要面向 Windows 桌面环境。
+项目当前处于早期 MVP 阶段，优先适配 Windows 桌面环境。欢迎通过 Issue 和 PR 一起完善它。
 
-## 功能特性
+## 核心功能
 
-- 透明、无边框、始终置顶的悬浮岛窗口
-- 主显示器顶部居中定位，支持边缘收起和托盘隐藏
-- 胶囊态与展开面板态切换
-- 今日待办：新增、编辑、完成、删除任务
-- 专注任务：启动某个待办后，折叠态显示当前任务
-- 每日笔记：记录当天补充内容
-- 自动跨日归档：新的一天会归档上一天的待办和笔记
-- Markdown 保存：将当天内容保存为 `YYYY-MM-DD.md`
-- 历史回顾：以卡片或时间线方式查看已归档日期
-- 布局设置：透明度、缩放、顶部间距、颜色主题
-- 预设管理：保存、应用、重命名和删除自定义外观预设
-- AI Agent 状态灯：通过设置页一键安装/修复 Codex 与 Claude Code hooks，任务运行时红灯，空闲/完成时绿灯
-- 系统托盘：显示、隐藏和退出应用
-- 开机自启动：通过 Windows 当前用户启动项控制
+- 悬浮岛窗口：透明、无边框、始终置顶，支持折叠、展开、边缘收起和托盘隐藏。
+- AI Agent 状态灯：可安装/修复 Codex，用红/绿状态提示 Agent 是否正在运行。
+- 今日待办：新增、编辑、完成、删除任务，并可将某个任务设为当前专注任务。
+- 每日笔记：记录当天补充信息，与待办一起形成日归档。
+- 自动归档：跨日后自动归档上一天的待办和笔记。
+- Markdown 保存：将当天内容保存为 `YYYY-MM-DD.md` 文件，便于接入本地笔记流。
+- 历史回顾：以卡片或时间线方式查看已归档日期。
+- 剪贴板历史：记录文本和图片剪贴板内容，支持快捷键呼出、复制、删除和清空。
+- 媒体控制：查看系统音频活跃状态，控制播放/暂停、上一首、下一首。
+- 外观设置：调整透明度、缩放、顶部间距、主题颜色，并保存自定义预设。
+- 系统集成：支持系统托盘菜单、Windows 当前用户开机自启动。
+
+## 部署方式
+
+### 方式一：通过源码部署
+
+适合想参与开发、自己构建可执行文件，或暂时没有可用 Release 包的用户。
+
+#### 环境要求
+
+- Windows 10 / Windows 11
+- Node.js
+- pnpm
+- Rust / Cargo
+- Microsoft Visual Studio Build Tools，并安装 C++ 工作负载
+- Microsoft Edge WebView2 Runtime
+
+#### 步骤
+
+```powershell
+git clone <your-repository-url>
+cd FocuSD
+pnpm install
+pnpm tauri build
+```
+
+构建完成后，Windows 可执行文件通常位于：
+
+```text
+src-tauri/target/release/focusd-island.exe
+```
+
+如果只想生成 release 可执行文件，不生成安装包，可以运行：
+
+```powershell
+pnpm tauri build --no-bundle
+```
+
+开发时可以使用：
+
+```powershell
+pnpm tauri dev
+```
+
+如果只需要启动前端开发服务器：
+
+```powershell
+pnpm dev
+```
+
+### 方式二：通过 Release 部署
+
+适合只想直接使用应用的用户。
+
+1. 打开本仓库的 GitHub Releases 页面。
+2. 下载最新版本的 Windows 安装包或 release 可执行文件。
+3. 如果下载的是安装包，按提示完成安装；如果下载的是可执行文件，直接运行即可。
+4. 首次启动后，可以在设置面板中配置 Markdown 保存目录、开机自启动、剪贴板历史和外观预设。
+
+如果 Release 页面暂未提供安装包，请先使用「通过源码部署」方式自行构建。
+
+## 常用命令
+
+| 命令 | 说明 |
+| --- | --- |
+| `pnpm install` | 安装前端与 Tauri CLI 依赖 |
+| `pnpm dev` | 启动 Vite 前端开发服务器 |
+| `pnpm build` | TypeScript 检查并构建前端 |
+| `pnpm preview` | 预览前端构建产物 |
+| `pnpm tauri dev` | 启动 Tauri 桌面开发模式 |
+| `pnpm tauri build` | 构建 Tauri 桌面应用 |
+| `pnpm tauri build --no-bundle` | 仅生成 release 可执行文件 |
 
 ## 技术栈
 
@@ -33,111 +101,56 @@ FocuSD Island 是一个轻量的桌面效率工具。它以透明、无边框、
 - [React 19](https://react.dev/)：前端界面
 - [Vite 7](https://vite.dev/)：前端开发与构建
 - [TypeScript](https://www.typescriptlang.org/)：类型约束
-- [Rust](https://www.rust-lang.org/)：Tauri 后端命令、窗口定位、托盘和文件写入
+- [Rust](https://www.rust-lang.org/)：窗口定位、托盘、文件写入、媒体控制和 Windows API 集成
 - [lucide-react](https://lucide.dev/)：界面图标
-
-## 环境要求
-
-请先准备以下环境：
-
-- Node.js
-- pnpm
-- Rust / Cargo
-- Microsoft Visual Studio Build Tools，并安装 C++ 工作负载
-- Microsoft Edge WebView2 Runtime
-
-## 本地开发
-
-安装依赖：
-
-```powershell
-pnpm install
-```
-
-启动 Tauri 开发模式：
-
-```powershell
-pnpm tauri dev
-```
-
-仅启动前端开发服务器：
-
-```powershell
-pnpm dev
-```
-
-## 构建
-
-构建前端资源：
-
-```powershell
-pnpm build
-```
-
-构建 Tauri 应用：
-
-```powershell
-pnpm tauri build
-```
-
-如果只需要生成 release 可执行文件，不生成安装包：
-
-```powershell
-pnpm tauri build --no-bundle
-```
-
-生成的 Windows 可执行文件位于：
-
-```text
-src-tauri/target/release/focusd-island.exe
-```
-
-## 常用脚本
-
-| 命令 | 说明 |
-| --- | --- |
-| `pnpm dev` | 启动 Vite 前端开发服务器 |
-| `pnpm build` | TypeScript 检查并构建前端 |
-| `pnpm preview` | 预览前端构建产物 |
-| `pnpm tauri dev` | 启动桌面应用开发模式 |
-| `pnpm tauri build` | 构建桌面应用 |
 
 ## 数据与存储
 
-- 待办、笔记、归档和外观设置默认保存在浏览器 `localStorage` 中。
-- 在设置面板中填写待办保存目录后，可以将当天内容保存为 Markdown 文件。
-- Markdown 文件名格式为 `YYYY-MM-DD.md`。
-- AI Agent 状态灯通过 `%APPDATA%\com.focusd.island\agent-status.json` 和同目录 marker 文件读取 Codex / Claude Code hook 状态。
-- 开机自启动使用 Windows 注册表当前用户启动项：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`。
+- 待办、每日笔记、归档、外观设置等前端状态默认保存在 `localStorage`。
+- 配置保存目录后，今日内容可以写入本地 Markdown 文件，文件名为 `YYYY-MM-DD.md`。
+- 剪贴板历史、AI Agent 状态等原生侧数据保存在应用数据目录中。
+- AI Agent 状态灯会读取 `%APPDATA%\com.focusd.island\agent-status.json` 和同目录 marker 文件。
+- 开机自启动使用 Windows 当前用户注册表路径：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`。
 
 ## 项目结构
 
 ```text
 .
-├── src/                 # React 前端代码
-│   ├── App.tsx          # 悬浮岛、待办、笔记、设置等核心界面逻辑
-│   ├── App.css          # 界面样式
-│   └── main.tsx         # React 入口
-├── src-tauri/           # Tauri / Rust 桌面端代码
-│   ├── src/lib.rs       # 原生命令、窗口定位、托盘、文件保存
-│   ├── src/main.rs      # Tauri 程序入口
-│   └── tauri.conf.json  # Tauri 应用配置
-├── package.json         # 前端依赖与脚本
-├── vite.config.ts       # Vite 配置
+├── src/                    # React 前端
+│   ├── App.tsx             # 核心 UI、状态和 Tauri invoke 调用
+│   ├── App.css             # 主要样式
+│   └── main.tsx            # React 入口
+├── src-tauri/              # Tauri / Rust 桌面端
+│   ├── src/lib.rs          # 原生命令、窗口定位、托盘、媒体和文件保存
+│   ├── src/clipboard_history.rs
+│   ├── src/main.rs         # Tauri 应用入口
+│   ├── capabilities/       # Tauri 权限能力配置
+│   └── tauri.conf.json     # Tauri 配置
+├── scripts/                # Agent 状态 hook 脚本
+├── package.json
 └── README.md
 ```
 
-## 开发状态
+## 未来计划
 
-当前版本：`0.1.0`
+- 开发并适配 macOS 版本。
+- 完善安装包发布流程和自动更新能力。
+- 增强多显示器定位策略。
+- 增加更完整的快捷键与键盘工作流。
+- 扩展任务分类、排序、标签和筛选能力。
+- 增加数据导入、导出和同步方案。
+- 优化剪贴板历史、媒体控制和 AI Agent 状态灯体验。
 
-FocuSD Island 仍在 MVP 阶段，后续可以继续扩展：
+## 参与贡献
 
-- 更完整的快捷键支持
-- 更灵活的任务分类和排序
-- 安装包发布与自动更新
-- 多显示器位置策略
-- 数据导入、导出与同步
+欢迎提交 Issue 和 Pull Request。
+
+- 发现 Bug：请在 Issue 中说明系统版本、复现步骤、预期行为和实际行为。
+- 提出新功能：请描述使用场景，以及它如何帮助保持专注或提升效率。
+- 提交 PR：建议保持改动小而清晰，并在说明中写明验证过的命令。
+- macOS 适配、Windows 原生能力、Tauri 权限、安全边界、UI 细节优化都非常欢迎。
+
+当前项目仍在 MVP 阶段，很多地方可以一起打磨。
 
 ## 许可
 
@@ -149,32 +162,100 @@ FocuSD Island 仍在 MVP 阶段，后续可以继续扩展：
 
 # FocuSD Island
 
-> A Windows-first Tauri + React floating island for keeping today's most important work at the top of your screen.
+> A Windows-first Tauri + React floating island for keeping today's tasks, notes, clipboard history, and media controls at the top of your screen.
 
 Language: [中文](#focusd-island) | English
 
 ## Overview
 
-FocuSD Island is a lightweight desktop productivity app. It lives as a transparent, borderless, always-on-top island near the top of the primary display. In its collapsed state it behaves like a compact capsule; when expanded, it lets you manage today's todos, write a daily note, save Markdown archives, and tune the island's appearance and placement.
+FocuSD Island is a lightweight desktop productivity app. It runs as a transparent, borderless, always-on-top island near the top of the primary display. In its collapsed state it behaves like a compact capsule; when expanded, it lets you manage today's todos, write a daily note, review archives, inspect clipboard history, control media playback, and tune the island's appearance and placement.
 
-The project is currently an early MVP and is mainly designed for Windows desktop usage.
+The project is currently an early MVP and is mainly designed for Windows desktop usage. Issues and pull requests are welcome.
 
-## Features
+## Core Features
 
-- Transparent, borderless, always-on-top floating island window
-- Top-center positioning on the primary display, with edge tuck and tray hiding
-- Collapsed capsule state and expanded panel state
-- Today's todos: add, edit, complete, and delete tasks
-- Focus task mode: start a todo and show it in the collapsed island
-- Daily note for extra context
-- Automatic day rollover and archive creation
-- Markdown export as `YYYY-MM-DD.md`
-- Archive review with notebook cards or a two-column timeline
-- Layout settings for opacity, scale, top margin, and colors
-- Preset management for saving, applying, renaming, and deleting custom looks
-- AI agent status light: install or repair Codex and Claude Code hooks from Settings, turning red while an agent task is running and green when idle or finished
-- System tray menu for showing, hiding, and quitting the app
-- Launch-at-startup support through the current Windows user startup registry entry
+- Floating island window: transparent, borderless, always on top, with collapsed, expanded, edge-tucked, and tray-hidden states.
+- Today's todos: add, edit, complete, delete, and mark a task as the current focus.
+- AI agent status light: install or repair Codex, then show whether an agent is running.
+- Daily note: capture extra context for the day and archive it with the todo list.
+- Automatic archive: roll over the previous day's todos and note when a new day starts.
+- Markdown saving: write today's content to a local `YYYY-MM-DD.md` file.
+- Archive review: browse saved days with cards or a timeline layout.
+- Clipboard history: capture text and image clipboard items, open with a shortcut, copy, delete, or clear them.
+- Media control: read system audio activity and control play/pause, previous, and next.
+- Appearance settings: tune opacity, scale, top margin, theme colors, and custom presets.
+- System integration: tray menu and Windows current-user launch-at-startup support.
+
+## Deployment Options
+
+### Option 1: Deploy From Source
+
+Use this path if you want to develop the app, build the executable yourself, or use the project before a packaged Release is available.
+
+#### Requirements
+
+- Windows 10 / Windows 11
+- Node.js
+- pnpm
+- Rust / Cargo
+- Microsoft Visual Studio Build Tools with the C++ workload
+- Microsoft Edge WebView2 Runtime
+
+#### Steps
+
+```powershell
+git clone <your-repository-url>
+cd FocuSD
+pnpm install
+pnpm tauri build
+```
+
+After the build finishes, the Windows executable is usually written to:
+
+```text
+src-tauri/target/release/focusd-island.exe
+```
+
+To build only the release executable without creating installers, run:
+
+```powershell
+pnpm tauri build --no-bundle
+```
+
+For development, run:
+
+```powershell
+pnpm tauri dev
+```
+
+To start only the frontend dev server:
+
+```powershell
+pnpm dev
+```
+
+### Option 2: Deploy From Release
+
+Use this path if you only want to install and run the app.
+
+1. Open the GitHub Releases page for this repository.
+2. Download the latest Windows installer or release executable.
+3. If you downloaded an installer, follow the installer steps. If you downloaded a standalone executable, run it directly.
+4. After first launch, configure the Markdown save directory, launch-at-startup option, clipboard history, and appearance presets from Settings.
+
+If no packaged Release is available yet, use the source deployment path above.
+
+## Common Commands
+
+| Command | Description |
+| --- | --- |
+| `pnpm install` | Install frontend and Tauri CLI dependencies |
+| `pnpm dev` | Start the Vite frontend dev server |
+| `pnpm build` | Type-check and build the frontend |
+| `pnpm preview` | Preview the frontend build output |
+| `pnpm tauri dev` | Start the Tauri desktop app in development mode |
+| `pnpm tauri build` | Build the Tauri desktop app |
+| `pnpm tauri build --no-bundle` | Build only the release executable |
 
 ## Tech Stack
 
@@ -182,111 +263,56 @@ The project is currently an early MVP and is mainly designed for Windows desktop
 - [React 19](https://react.dev/) for the UI
 - [Vite 7](https://vite.dev/) for development and frontend builds
 - [TypeScript](https://www.typescriptlang.org/) for type safety
-- [Rust](https://www.rust-lang.org/) for Tauri commands, window positioning, tray integration, and file writing
+- [Rust](https://www.rust-lang.org/) for window positioning, tray integration, file writing, media control, and Windows API integration
 - [lucide-react](https://lucide.dev/) for icons
-
-## Prerequisites
-
-Make sure you have:
-
-- Node.js
-- pnpm
-- Rust / Cargo
-- Microsoft Visual Studio Build Tools with the C++ workload
-- Microsoft Edge WebView2 Runtime
-
-## Development
-
-Install dependencies:
-
-```powershell
-pnpm install
-```
-
-Run the Tauri app in development mode:
-
-```powershell
-pnpm tauri dev
-```
-
-Run only the frontend dev server:
-
-```powershell
-pnpm dev
-```
-
-## Build
-
-Build the frontend assets:
-
-```powershell
-pnpm build
-```
-
-Build the Tauri app:
-
-```powershell
-pnpm tauri build
-```
-
-Build only the release executable without creating installers:
-
-```powershell
-pnpm tauri build --no-bundle
-```
-
-The Windows executable is written to:
-
-```text
-src-tauri/target/release/focusd-island.exe
-```
-
-## Scripts
-
-| Command | Description |
-| --- | --- |
-| `pnpm dev` | Start the Vite frontend dev server |
-| `pnpm build` | Type-check and build the frontend |
-| `pnpm preview` | Preview the frontend build output |
-| `pnpm tauri dev` | Start the desktop app in development mode |
-| `pnpm tauri build` | Build the desktop app |
 
 ## Data And Storage
 
-- Todos, notes, archives, and appearance settings are stored in browser `localStorage` by default.
-- After setting a todo save directory in the settings panel, today's content can be saved as a Markdown file.
-- Markdown files use the `YYYY-MM-DD.md` filename format.
-- The AI agent status light reads Codex / Claude Code hook state from `%APPDATA%\com.focusd.island\agent-status.json` and marker files in the same directory.
+- Todos, daily notes, archives, appearance settings, and other frontend state are stored in `localStorage` by default.
+- After configuring a save directory, today's content can be written to a local Markdown file named `YYYY-MM-DD.md`.
+- Clipboard history and AI agent state files are stored in the app data directory.
+- The AI agent status light reads `%APPDATA%\com.focusd.island\agent-status.json` and marker files in the same directory.
 - Launch-at-startup uses the current Windows user registry path: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 ## Project Structure
 
 ```text
 .
-├── src/                 # React frontend code
-│   ├── App.tsx          # Core island, todo, note, and settings UI logic
-│   ├── App.css          # UI styles
-│   └── main.tsx         # React entry point
-├── src-tauri/           # Tauri / Rust desktop code
-│   ├── src/lib.rs       # Native commands, window positioning, tray, file saving
-│   ├── src/main.rs      # Tauri application entry point
-│   └── tauri.conf.json  # Tauri app configuration
-├── package.json         # Frontend dependencies and scripts
-├── vite.config.ts       # Vite configuration
+├── src/                    # React frontend
+│   ├── App.tsx             # Core UI, state, and Tauri invoke calls
+│   ├── App.css             # Main styles
+│   └── main.tsx            # React entry point
+├── src-tauri/              # Tauri / Rust desktop side
+│   ├── src/lib.rs          # Native commands, window positioning, tray, media, file saving
+│   ├── src/clipboard_history.rs
+│   ├── src/main.rs         # Tauri application entry point
+│   ├── capabilities/       # Tauri permission capabilities
+│   └── tauri.conf.json     # Tauri configuration
+├── scripts/                # Agent status hook scripts
+├── package.json
 └── README.md
 ```
 
-## Status
+## Roadmap
 
-Current version: `0.1.0`
+- Build and adapt a macOS version.
+- Improve packaged releases and automatic updates.
+- Strengthen multi-monitor positioning strategies.
+- Add more complete keyboard shortcuts and keyboard-first workflows.
+- Expand task categories, ordering, tags, and filters.
+- Add data import, export, and sync options.
+- Improve clipboard history, media control, and AI agent status light workflows.
 
-FocuSD Island is still in MVP stage. Possible next steps include:
+## Contributing
 
-- More complete keyboard shortcut support
-- More flexible task categorization and ordering
-- Installer release and auto-update support
-- Multi-monitor positioning strategies
-- Data import, export, and sync
+Issues and pull requests are welcome.
+
+- For bugs, include your OS version, reproduction steps, expected behavior, and actual behavior.
+- For feature requests, describe the workflow and how it helps focus or productivity.
+- For PRs, keep changes focused and list the commands you used for verification.
+- macOS support, Windows native capabilities, Tauri permissions, security boundaries, and UI polish are all very welcome.
+
+The project is still in MVP stage, so there is plenty of room to shape it together.
 
 ## License
 
