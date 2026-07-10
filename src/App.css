@@ -997,6 +997,14 @@ input {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.todo-notebook--review {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.todo-notebook--review .todo-list {
+  overflow-y: auto;
+}
+
 .todo-notebook::before {
   content: "";
   position: absolute;
@@ -1544,6 +1552,10 @@ input {
   overscroll-behavior-x: contain;
 }
 
+.todo-notebook--archive .archive-cards {
+  align-items: flex-start;
+}
+
 .archive-cards::-webkit-scrollbar,
 .archive-timeline::-webkit-scrollbar {
   height: 6px;
@@ -1582,6 +1594,11 @@ input {
     border-color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
+}
+
+.todo-notebook--archive .archive-card {
+  height: 100%;
+  max-height: 214px;
 }
 
 .archive-card::before {

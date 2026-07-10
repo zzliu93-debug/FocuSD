@@ -185,6 +185,7 @@ const TODO_SAVE_DIRECTORY_STORAGE_KEY = "focusd-island-save-directory";
 const TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY =
   "focusd-island-last-saved-signature";
 const BASE_EXPANDED_ISLAND_HEIGHT = 306;
+const TODO_ARCHIVE_EXPANDED_ISLAND_HEIGHT = 352;
 const MUSIC_EXPANDED_ISLAND_HEIGHT = 286;
 const CLIPBOARD_EXPANDED_ISLAND_HEIGHT = 430;
 const EDITOR_EXPANDED_ISLAND_HEIGHT = 430;
@@ -1681,6 +1682,7 @@ function TodoNotebook({
     "todo-notebook",
     isDailyMode ? "todo-notebook--daily" : "",
     isArchiveMode ? "todo-notebook--archive" : "",
+    isReviewMode ? "todo-notebook--review" : "",
     isArchiveMode ? `todo-notebook--archive-${archiveLayout}` : "",
   ]
     .filter(Boolean)
@@ -2648,23 +2650,23 @@ function App() {
   const didShowInitialWindow = useRef(false);
   const selectedArchive =
     archives.find((archive) => archive.date === selectedArchiveDate) ?? null;
+  const isTodoArchivePage =
+    page === "todo" && (todoPageMode === "archive" || todoPageMode === "review");
   const visibleTodoRows = Math.min(
     Math.max(
-      todoPageMode === "archive"
-        ? archives.length
-        : todoPageMode === "review"
-          ? getTodoVisualRows(selectedArchive?.todos ?? [])
-          : todoPageMode === "daily"
-            ? TODO_GROW_START_ROWS
-          : getTodoVisualRows(todos),
+      todoPageMode === "daily" || isTodoArchivePage
+        ? TODO_GROW_START_ROWS
+        : getTodoVisualRows(todos),
       1,
     ),
     TODO_SCROLL_START_ROWS,
   );
   const expandedIslandHeight =
     page === "todo"
-      ? BASE_EXPANDED_ISLAND_HEIGHT +
-        Math.max(0, visibleTodoRows - TODO_GROW_START_ROWS) * TODO_ROW_HEIGHT
+      ? isTodoArchivePage
+        ? TODO_ARCHIVE_EXPANDED_ISLAND_HEIGHT
+        : BASE_EXPANDED_ISLAND_HEIGHT +
+          Math.max(0, visibleTodoRows - TODO_GROW_START_ROWS) * TODO_ROW_HEIGHT
       : page === "music"
         ? MUSIC_EXPANDED_ISLAND_HEIGHT
         : page === "clipboard"
