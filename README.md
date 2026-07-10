@@ -1,19 +1,19 @@
 # FocuSD Island
 
-> 一个 Windows 优先的 Tauri + React 桌面悬浮岛，把当天最重要的任务、笔记、Codex任务状态、历史剪贴板和媒体控制放在屏幕顶部。
+> 一个 Windows 优先的 Tauri + React 桌面悬浮岛，把当天最重要的任务、笔记、Codex 状态、历史剪贴板和媒体控制放在屏幕顶部。
 
 语言：中文 | [English](#english)
 
 ## 项目简介
 
-FocuSD Island 是一个轻量级桌面效率工具。它以透明、无边框、始终置顶的「悬浮岛」形式停靠在主显示器顶部，默认是紧凑胶囊形态，展开后可以查看Codex状态指示灯、管理今日待办、记录每日笔记、回顾归档、查看剪贴板历史、控制媒体播放，并调整悬浮岛的外观与位置。
+FocuSD Island 是一个轻量级桌面效率工具。它以透明、无边框、始终置顶的「悬浮岛」形式停靠在主显示器顶部，默认是紧凑胶囊形态，展开后可以查看 Codex 状态指示灯、管理今日待办、记录每日笔记、回顾归档、查看剪贴板历史、控制媒体播放，并调整悬浮岛的外观与位置。
 
 项目当前处于早期 MVP 阶段，优先适配 Windows 桌面环境。欢迎通过 Issue 和 PR 一起完善它。
 
 ## 核心功能
 
 - 悬浮岛窗口：透明、无边框、始终置顶，支持折叠、展开、边缘收起和托盘隐藏。
-- AI Agent 状态灯：可安装/修复 Codex，用红/绿状态提示 Agent 是否正在运行。
+- Codex 状态指示灯：可一键安装/修复 Codex hooks，用红/绿状态提示 Codex 是否正在运行。
 - 今日待办：新增、编辑、完成、删除任务，并可将某个任务设为当前专注任务。
 - 每日笔记：记录当天补充信息，与待办一起形成日归档。
 - 自动归档：跨日后自动归档上一天的待办和笔记。
@@ -24,9 +24,27 @@ FocuSD Island 是一个轻量级桌面效率工具。它以透明、无边框、
 - 外观设置：调整透明度、缩放、顶部间距、主题颜色，并保存自定义预设。
 - 系统集成：支持系统托盘菜单、Windows 当前用户开机自启动。
 
+## Codex 状态指示灯
+
+FocuSD Island 内置 Codex 状态指示灯，适合把 AI 编程任务的运行状态放在桌面最显眼的位置。你可以在设置页一键安装或修复 Codex hooks；当 Codex 正在处理任务时，悬浮岛会显示运行状态，任务空闲或完成后会回到完成/空闲状态。
+
+这个功能的目标很简单：不用反复切回终端或编辑器，也能知道 Codex 现在是在工作、已完成，还是需要你接手。
+
 ## 部署方式
 
-### 方式一：通过源码部署
+### 方式一：通过 Release 部署
+
+适合只想直接使用应用的用户。
+
+1. 打开本仓库的 GitHub Releases 页面。
+2. 下载最新版本的 Windows 安装包或 release 可执行文件。
+3. 推荐优先下载 `FocuSD Island_0.1.0_x64-setup.exe` 安装包。
+4. 如果下载的是安装包，按提示完成安装；如果下载的是可执行文件，直接运行即可。
+5. 首次启动后，可以在设置面板中配置 Markdown 保存目录、开机自启动、Codex 状态指示灯、剪贴板历史和外观预设。
+
+如果 Release 页面暂未提供安装包，请先使用「通过源码部署」方式自行构建。
+
+### 方式二：通过源码部署
 
 适合想参与开发、自己构建可执行文件，或暂时没有可用 Release 包的用户。
 
@@ -72,17 +90,6 @@ pnpm tauri dev
 pnpm dev
 ```
 
-### 方式二：通过 Release 部署
-
-适合只想直接使用应用的用户。
-
-1. 打开本仓库的 GitHub Releases 页面。
-2. 下载最新版本的 Windows 安装包或 release 可执行文件。
-3. 如果下载的是安装包，按提示完成安装；如果下载的是可执行文件，直接运行即可。
-4. 首次启动后，可以在设置面板中配置 Markdown 保存目录、开机自启动、剪贴板历史和外观预设。
-
-如果 Release 页面暂未提供安装包，请先使用「通过源码部署」方式自行构建。
-
 ## 常用命令
 
 | 命令 | 说明 |
@@ -108,8 +115,8 @@ pnpm dev
 
 - 待办、每日笔记、归档、外观设置等前端状态默认保存在 `localStorage`。
 - 配置保存目录后，今日内容可以写入本地 Markdown 文件，文件名为 `YYYY-MM-DD.md`。
-- 剪贴板历史、AI Agent 状态等原生侧数据保存在应用数据目录中。
-- AI Agent 状态灯会读取 `%APPDATA%\com.focusd.island\agent-status.json` 和同目录 marker 文件。
+- 剪贴板历史、Codex 状态等原生侧数据保存在应用数据目录中。
+- Codex 状态指示灯会读取 `%APPDATA%\com.focusd.island\agent-status.json` 和同目录 marker 文件。
 - 开机自启动使用 Windows 当前用户注册表路径：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`。
 
 ## 项目结构
@@ -139,7 +146,7 @@ pnpm dev
 - 增加更完整的快捷键与键盘工作流。
 - 扩展任务分类、排序、标签和筛选能力。
 - 增加数据导入、导出和同步方案。
-- 优化剪贴板历史、媒体控制和 AI Agent 状态灯体验。
+- 优化剪贴板历史、媒体控制和 Codex 状态指示灯体验。
 
 ## 参与贡献
 
@@ -162,13 +169,13 @@ pnpm dev
 
 # FocuSD Island
 
-> A Windows-first Tauri + React floating island for keeping today's tasks, notes, clipboard history, and media controls at the top of your screen.
+> A Windows-first Tauri + React floating island for keeping today's tasks, notes, Codex status, clipboard history, and media controls at the top of your screen.
 
 Language: [中文](#focusd-island) | English
 
 ## Overview
 
-FocuSD Island is a lightweight desktop productivity app. It runs as a transparent, borderless, always-on-top island near the top of the primary display. In its collapsed state it behaves like a compact capsule; when expanded, it lets you manage today's todos, write a daily note, review archives, inspect clipboard history, control media playback, and tune the island's appearance and placement.
+FocuSD Island is a lightweight desktop productivity app. It runs as a transparent, borderless, always-on-top island near the top of the primary display. In its collapsed state it behaves like a compact capsule; when expanded, it lets you inspect Codex status, manage today's todos, write a daily note, review archives, inspect clipboard history, control media playback, and tune the island's appearance and placement.
 
 The project is currently an early MVP and is mainly designed for Windows desktop usage. Issues and pull requests are welcome.
 
@@ -176,7 +183,7 @@ The project is currently an early MVP and is mainly designed for Windows desktop
 
 - Floating island window: transparent, borderless, always on top, with collapsed, expanded, edge-tucked, and tray-hidden states.
 - Today's todos: add, edit, complete, delete, and mark a task as the current focus.
-- AI agent status light: install or repair Codex, then show whether an agent is running.
+- Codex status light: install or repair Codex hooks, then show whether Codex is currently running.
 - Daily note: capture extra context for the day and archive it with the todo list.
 - Automatic archive: roll over the previous day's todos and note when a new day starts.
 - Markdown saving: write today's content to a local `YYYY-MM-DD.md` file.
@@ -186,9 +193,27 @@ The project is currently an early MVP and is mainly designed for Windows desktop
 - Appearance settings: tune opacity, scale, top margin, theme colors, and custom presets.
 - System integration: tray menu and Windows current-user launch-at-startup support.
 
+## Codex Status Light
+
+FocuSD Island includes a Codex status light for keeping AI coding work visible at a glance. From Settings, you can install or repair Codex hooks; while Codex is processing a task, the island shows a running state, then returns to idle or completed when the task finishes.
+
+The goal is simple: you can tell whether Codex is still working, already finished, or needs your attention without constantly switching back to the terminal or editor.
+
 ## Deployment Options
 
-### Option 1: Deploy From Source
+### Option 1: Deploy From Release
+
+Use this path if you only want to install and run the app.
+
+1. Open the GitHub Releases page for this repository.
+2. Download the latest Windows installer or release executable.
+3. Prefer `FocuSD Island_0.1.0_x64-setup.exe` for normal installation.
+4. If you downloaded an installer, follow the installer steps. If you downloaded a standalone executable, run it directly.
+5. After first launch, configure the Markdown save directory, launch-at-startup option, Codex status light, clipboard history, and appearance presets from Settings.
+
+If no packaged Release is available yet, use the source deployment path below.
+
+### Option 2: Deploy From Source
 
 Use this path if you want to develop the app, build the executable yourself, or use the project before a packaged Release is available.
 
@@ -234,17 +259,6 @@ To start only the frontend dev server:
 pnpm dev
 ```
 
-### Option 2: Deploy From Release
-
-Use this path if you only want to install and run the app.
-
-1. Open the GitHub Releases page for this repository.
-2. Download the latest Windows installer or release executable.
-3. If you downloaded an installer, follow the installer steps. If you downloaded a standalone executable, run it directly.
-4. After first launch, configure the Markdown save directory, launch-at-startup option, clipboard history, and appearance presets from Settings.
-
-If no packaged Release is available yet, use the source deployment path above.
-
 ## Common Commands
 
 | Command | Description |
@@ -270,8 +284,8 @@ If no packaged Release is available yet, use the source deployment path above.
 
 - Todos, daily notes, archives, appearance settings, and other frontend state are stored in `localStorage` by default.
 - After configuring a save directory, today's content can be written to a local Markdown file named `YYYY-MM-DD.md`.
-- Clipboard history and AI agent state files are stored in the app data directory.
-- The AI agent status light reads `%APPDATA%\com.focusd.island\agent-status.json` and marker files in the same directory.
+- Clipboard history and Codex state files are stored in the app data directory.
+- The Codex status light reads `%APPDATA%\com.focusd.island\agent-status.json` and marker files in the same directory.
 - Launch-at-startup uses the current Windows user registry path: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 ## Project Structure
@@ -301,7 +315,7 @@ If no packaged Release is available yet, use the source deployment path above.
 - Add more complete keyboard shortcuts and keyboard-first workflows.
 - Expand task categories, ordering, tags, and filters.
 - Add data import, export, and sync options.
-- Improve clipboard history, media control, and AI agent status light workflows.
+- Improve clipboard history, media control, and Codex status light workflows.
 
 ## Contributing
 
