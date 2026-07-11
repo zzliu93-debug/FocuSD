@@ -29,6 +29,7 @@ import {
   Search,
   SkipBack,
   SkipForward,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -99,6 +100,7 @@ type ClipboardHistoryItem = {
   hash: string;
   createdAt: number;
   copiedAt: number;
+  favorite?: boolean;
   preview: string;
   text?: string;
   image?: ClipboardHistoryImage;
@@ -549,7 +551,7 @@ function loadSettingPresets(): IslandPreset[] {
         name:
           typeof preset.name === "string" && preset.name.trim()
             ? preset.name.trim()
-            : `预设 ${index + 1}`,
+            : `样式预设 ${index + 1}`,
         settings: normalizeSettings(preset.settings),
         createdAt:
           typeof preset.createdAt === "number" ? preset.createdAt : Date.now(),
@@ -1468,7 +1470,7 @@ function LayoutEditor({
 
       <section className="settings-section settings-section--presets">
         <div className="settings-section__header">
-          <span>预设</span>
+          <span>样式预设</span>
           <button
             className="preset-save-button"
             type="button"
@@ -1479,7 +1481,7 @@ function LayoutEditor({
           </button>
         </div>
         {presets.length === 0 ? (
-          <div className="preset-empty">还没有预设</div>
+          <div className="preset-empty">还没有样式预设</div>
         ) : (
           <div className="preset-list" role="list">
             {presets.map((preset) => (
@@ -1497,7 +1499,7 @@ function LayoutEditor({
                   <input
                     className="preset-name-input"
                     value={presetNameDraft}
-                    aria-label="预设名称"
+                    aria-label="样式预设名称"
                     autoFocus
                     onChange={(event) =>
                       setPresetNameDraft(event.currentTarget.value)
@@ -1518,7 +1520,7 @@ function LayoutEditor({
                   <button
                     className="preset-name-button"
                     type="button"
-                    title={preset.isDefault ? "默认预设" : "重命名预设"}
+                    title={preset.isDefault ? "默认样式预设" : "重命名样式预设"}
                     disabled={preset.isDefault}
                     onClick={() => {
                       if (!preset.isDefault) {
@@ -1542,7 +1544,7 @@ function LayoutEditor({
                   <button
                     className="preset-delete-button"
                     type="button"
-                    title="删除预设"
+                    title="删除样式预设"
                     aria-label={`删除 ${preset.name}`}
                     onClick={() => onDeletePreset(preset.id)}
                   >
@@ -2222,15 +2224,18 @@ function MusicLevelWave({
 function ClipboardHistoryPanel({
   snapshot,
   onCopyItem,
+  onToggleFavorite,
   onDeleteItem,
   onClear,
 }: {
   snapshot: ClipboardHistorySnapshot;
   onCopyItem: (id: string) => Promise<boolean> | boolean;
+  onToggleFavorite: (id: string) => Promise<void> | void;
   onDeleteItem: (id: string) => Promise<void> | void;
   onClear: () => Promise<void> | void;
 }) {
   const [query, setQuery] = useState("");
+  const [clipboardView, setClipboardView] = useState<"all" | "favorites">("all");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
@@ -2240,12 +2245,17 @@ function ClipboardHistoryPanel({
   const itemElementsRef = useRef<Map<string, HTMLElement>>(new Map());
   const itemPositionsRef = useRef<Map<string, DOMRect>>(new Map());
   const normalizedQuery = query.trim().toLowerCase();
+  const favoriteItems = useMemo(
+    () => snapshot.items.filter((item) => item.favorite),
+    [snapshot.items],
+  );
+  const viewedItems = clipboardView === "favorites" ? favoriteItems : snapshot.items;
   const filteredItems = useMemo(() => {
     if (!normalizedQuery) {
-      return snapshot.items;
+      return viewedItems;
     }
 
-    return snapshot.items.filter((item) => {
+    return viewedItems.filter((item) => {
       const haystack = [
         item.preview,
         item.text ?? "",
@@ -2255,7 +2265,7 @@ function ClipboardHistoryPanel({
 
       return item.kind === "text" && haystack.includes(normalizedQuery);
     });
-  }, [normalizedQuery, snapshot.items]);
+  }, [normalizedQuery, viewedItems]);
 
   useEffect(
     () => () => {
@@ -2429,6 +2439,14 @@ function ClipboardHistoryPanel({
     [onCopyItem, showCopiedState],
   );
 
+  const handleToggleFavorite = useCallback(
+    (id: string) => {
+      setConfirmDeleteId(null);
+      void Promise.resolve(onToggleFavorite(id));
+    },
+    [onToggleFavorite],
+  );
+
   const handleDeleteItem = useCallback(
     (id: string) => {
       if (confirmDeleteId !== id) {
@@ -2463,6 +2481,12 @@ function ClipboardHistoryPanel({
           <ClipboardList size={16} strokeWidth={2.2} />
           <span>剪贴板历史</span>
           <strong>{snapshot.items.length}</strong>
+          {favoriteItems.length > 0 && (
+            <em aria-label={`${favoriteItems.length} 条收藏`}>
+              <Star size={10} strokeWidth={2.4} fill="currentColor" />
+              {favoriteItems.length}
+            </em>
+          )}
         </div>
         <div className="clipboard-panel__tools">
           <span className="clipboard-shortcut-display" aria-label="展开快捷键">
@@ -2492,6 +2516,25 @@ function ClipboardHistoryPanel({
         </div>
       </header>
 
+      <div className="clipboard-segments" aria-label="剪贴板栏目">
+        <button
+          className={clipboardView === "all" ? "clipboard-segment--active" : ""}
+          type="button"
+          aria-pressed={clipboardView === "all"}
+          onClick={() => setClipboardView("all")}
+        >
+          全部
+        </button>
+        <button
+          className={clipboardView === "favorites" ? "clipboard-segment--active" : ""}
+          type="button"
+          aria-pressed={clipboardView === "favorites"}
+          onClick={() => setClipboardView("favorites")}
+        >
+          收藏
+        </button>
+      </div>
+
       <label className="clipboard-search">
         <Search size={15} strokeWidth={2.2} />
         <input
@@ -2517,7 +2560,9 @@ function ClipboardHistoryPanel({
           <div className="clipboard-empty">
             {snapshot.items.length === 0
               ? "复制文本或图片后会出现在这里"
-              : "没有匹配的剪贴记录"}
+              : clipboardView === "favorites" && favoriteItems.length === 0
+                ? "还没有收藏剪贴记录"
+                : "没有匹配的剪贴记录"}
           </div>
         ) : (
           filteredItems.map((item) => (
@@ -2559,21 +2604,22 @@ function ClipboardHistoryPanel({
               <div className="clipboard-item__actions">
                 <button
                   className={[
-                    "clipboard-copy-button",
-                    copiedItemId === item.id ? "clipboard-copy-button--copied" : "",
+                    "clipboard-favorite-button",
+                    item.favorite ? "clipboard-favorite-button--active" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
                   type="button"
-                  title={copiedItemId === item.id ? "已复制" : "复制"}
-                  aria-label="复制回剪贴板"
-                  onClick={() => handleCopyItem(item.id)}
+                  title={item.favorite ? "取消收藏" : "收藏"}
+                  aria-label={item.favorite ? "取消收藏剪贴记录" : "收藏剪贴记录"}
+                  aria-pressed={item.favorite}
+                  onClick={() => handleToggleFavorite(item.id)}
                 >
-                  {copiedItemId === item.id ? (
-                    <Check className="save-check-icon" size={14} strokeWidth={2.7} />
-                  ) : (
-                    <Copy size={14} strokeWidth={2.3} />
-                  )}
+                  <Star
+                    size={14}
+                    strokeWidth={2.3}
+                    fill={item.favorite ? "currentColor" : "none"}
+                  />
                 </button>
                 <button
                   className={[
@@ -2592,6 +2638,24 @@ function ClipboardHistoryPanel({
                     <Check className="save-check-icon" size={14} strokeWidth={2.7} />
                   ) : (
                     <Trash2 size={14} strokeWidth={2.3} />
+                  )}
+                </button>
+                <button
+                  className={[
+                    "clipboard-copy-button",
+                    copiedItemId === item.id ? "clipboard-copy-button--copied" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  type="button"
+                  title={copiedItemId === item.id ? "已复制" : "复制"}
+                  aria-label="复制回剪贴板"
+                  onClick={() => handleCopyItem(item.id)}
+                >
+                  {copiedItemId === item.id ? (
+                    <Check className="save-check-icon" size={14} strokeWidth={2.7} />
+                  ) : (
+                    <Copy size={14} strokeWidth={2.3} />
                   )}
                 </button>
               </div>
@@ -2646,6 +2710,14 @@ function App() {
   const [focusClipboardShortcutToken, setFocusClipboardShortcutToken] =
     useState(0);
   const clipboardShortcutToggleAt = useRef(0);
+  const shouldInitializeDefaultSaveDirectory = useRef(
+    window.localStorage.getItem(TODO_SAVE_DIRECTORY_STORAGE_KEY) === null,
+  );
+  const defaultSaveDirectoryRequestInFlight = useRef(false);
+  const autoSaveTimer = useRef<number | null>(null);
+  const autoSaveRequestId = useRef(0);
+  const saveStateResetTimer = useRef<number | null>(null);
+  const didHydrateAutoSave = useRef(false);
   const didCheckDate = useRef(false);
   const didShowInitialWindow = useRef(false);
   const selectedArchive =
@@ -2861,6 +2933,18 @@ function App() {
     } catch (error) {
       console.error("Failed to copy clipboard history item", error);
       return false;
+    }
+  }, []);
+
+  const toggleClipboardHistoryFavorite = useCallback(async (id: string) => {
+    try {
+      const snapshot = await invoke<ClipboardHistorySnapshot>(
+        "toggle_clipboard_history_favorite",
+        { id },
+      );
+      setClipboardHistory(snapshot);
+    } catch (error) {
+      console.error("Failed to toggle clipboard history favorite", error);
     }
   }, []);
 
@@ -3192,6 +3276,18 @@ function App() {
     [saveDirectory, upsertArchive],
   );
 
+  const showTodoSavedState = useCallback(() => {
+    if (saveStateResetTimer.current !== null) {
+      window.clearTimeout(saveStateResetTimer.current);
+    }
+
+    setSaveState("saved");
+    saveStateResetTimer.current = window.setTimeout(() => {
+      setSaveState("idle");
+      saveStateResetTimer.current = null;
+    }, 1200);
+  }, []);
+
   const saveTodayTodos = useCallback(async () => {
     if (!saveDirectory.trim()) {
       setSaveState("needs-path");
@@ -3205,13 +3301,19 @@ function App() {
 
     try {
       await saveTodosToDisk(currentTodoDate, todos, dailyNote);
-      setSaveState("saved");
-      window.setTimeout(() => setSaveState("idle"), 1200);
+      showTodoSavedState();
     } catch (error) {
       console.error("Failed to save todo markdown", error);
       setSaveState("error");
     }
-  }, [currentTodoDate, dailyNote, saveDirectory, saveTodosToDisk, todos]);
+  }, [
+    currentTodoDate,
+    dailyNote,
+    saveDirectory,
+    saveTodosToDisk,
+    showTodoSavedState,
+    todos,
+  ]);
 
   const saveDirectoryFromEditor = useCallback(() => {
     const nextDirectory = saveDirectoryDraft.trim();
@@ -3311,7 +3413,7 @@ function App() {
       ).length;
       const preset: IslandPreset = {
         id: createTodoId(),
-        name: `预设 ${customPresetCount + 1}`,
+        name: `样式预设 ${customPresetCount + 1}`,
         settings,
         createdAt: Date.now(),
         isDefault: false,
@@ -3454,6 +3556,53 @@ function App() {
   }, [refreshAgentStatus]);
 
   useEffect(() => {
+    if (
+      !shouldInitializeDefaultSaveDirectory.current ||
+      saveDirectory.trim() ||
+      defaultSaveDirectoryRequestInFlight.current
+    ) {
+      return;
+    }
+
+    let didCancel = false;
+    defaultSaveDirectoryRequestInFlight.current = true;
+
+    void invoke<string>("get_default_todo_save_directory")
+      .then((defaultDirectory) => {
+        if (didCancel) {
+          return;
+        }
+
+        const nextDirectory = defaultDirectory.trim();
+
+        if (!nextDirectory) {
+          return;
+        }
+
+        shouldInitializeDefaultSaveDirectory.current = false;
+        setSaveDirectory((currentDirectory) =>
+          currentDirectory.trim() ? currentDirectory : nextDirectory,
+        );
+        setSaveDirectoryDraft((currentDirectory) =>
+          currentDirectory.trim() ? currentDirectory : nextDirectory,
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to resolve default todo save path", error);
+      })
+      .finally(() => {
+        if (!didCancel) {
+          defaultSaveDirectoryRequestInFlight.current = false;
+        }
+      });
+
+    return () => {
+      didCancel = true;
+      defaultSaveDirectoryRequestInFlight.current = false;
+    };
+  }, [saveDirectory]);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
@@ -3481,8 +3630,83 @@ function App() {
   }, [archives]);
 
   useEffect(() => {
+    if (!saveDirectory && shouldInitializeDefaultSaveDirectory.current) {
+      return;
+    }
+
     window.localStorage.setItem(TODO_SAVE_DIRECTORY_STORAGE_KEY, saveDirectory);
   }, [saveDirectory]);
+
+  useEffect(() => {
+    if (!didHydrateAutoSave.current) {
+      didHydrateAutoSave.current = true;
+      return;
+    }
+
+    if (autoSaveTimer.current !== null) {
+      window.clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+
+    if (!saveDirectory.trim()) {
+      return;
+    }
+
+    const signature = getTodoSignature(currentTodoDate, todos, dailyNote);
+    const lastSavedSignature = window.localStorage.getItem(
+      TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY,
+    );
+
+    if (!todos.length && !dailyNote.trim() && !lastSavedSignature) {
+      return;
+    }
+
+    if (signature === lastSavedSignature) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      autoSaveTimer.current = null;
+      autoSaveRequestId.current += 1;
+      const requestId = autoSaveRequestId.current;
+
+      void saveTodosToDisk(currentTodoDate, todos, dailyNote)
+        .catch((error) => {
+          if (requestId === autoSaveRequestId.current) {
+            console.error("Failed to auto-save todo markdown", error);
+            setSaveState("error");
+          }
+        });
+    }, 700);
+
+    autoSaveTimer.current = timer;
+
+    return () => {
+      if (autoSaveTimer.current === timer) {
+        window.clearTimeout(timer);
+        autoSaveTimer.current = null;
+      }
+    };
+  }, [
+    currentTodoDate,
+    dailyNote,
+    saveDirectory,
+    saveTodosToDisk,
+    todos,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (autoSaveTimer.current !== null) {
+        window.clearTimeout(autoSaveTimer.current);
+      }
+
+      if (saveStateResetTimer.current !== null) {
+        window.clearTimeout(saveStateResetTimer.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (activeTodoId) {
@@ -3664,6 +3888,7 @@ function App() {
           <ClipboardHistoryPanel
             snapshot={clipboardHistory}
             onCopyItem={copyClipboardHistoryItem}
+            onToggleFavorite={(id) => void toggleClipboardHistoryFavorite(id)}
             onDeleteItem={(id) => void deleteClipboardHistoryItem(id)}
             onClear={() => void clearClipboardHistoryItems()}
           />

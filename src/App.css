@@ -629,8 +629,8 @@ input {
 .clipboard-panel {
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 10px;
   overflow: hidden;
   padding: 16px 18px 18px;
   color: #f8f4e9;
@@ -679,6 +679,20 @@ input {
   border: 0;
   border-radius: 999px;
   font-size: 11px;
+  font-weight: 900;
+}
+
+.clipboard-panel__title em {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.12);
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
   font-weight: 900;
 }
 
@@ -756,6 +770,37 @@ input {
   cursor: default;
   opacity: 0.38;
   transform: none;
+}
+
+.clipboard-segments {
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+}
+
+.clipboard-segments button {
+  min-width: 0;
+  height: 24px;
+  padding: 0 10px;
+  color: rgba(248, 244, 233, 0.62);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.clipboard-segments button:hover,
+.clipboard-segments .clipboard-segment--active {
+  color: #181410;
+  background: #ffd166;
 }
 
 .clipboard-search {
@@ -853,7 +898,7 @@ input {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
   padding: 7px;
   background: rgba(255, 255, 255, 0.075);
@@ -880,6 +925,7 @@ input {
 .clipboard-item__main:focus-visible,
 .clipboard-item__actions button:focus-visible,
 .clipboard-clear-button:focus-visible,
+.clipboard-segments button:focus-visible,
 .clipboard-search button:focus-visible {
   outline: 2px solid rgba(255, 209, 102, 0.76);
   outline-offset: 2px;
@@ -928,8 +974,9 @@ input {
 }
 
 .clipboard-item__actions {
-  display: grid;
-  align-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -950,6 +997,11 @@ input {
 .clipboard-item__actions button:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.16);
+}
+
+.clipboard-favorite-button--active {
+  color: #181410 !important;
+  background: #ffd166 !important;
 }
 
 .clipboard-copy-button--copied {

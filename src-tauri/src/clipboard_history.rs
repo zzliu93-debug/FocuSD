@@ -128,6 +128,8 @@ pub struct ClipboardHistoryItem {
     hash: String,
     created_at: i64,
     copied_at: i64,
+    #[serde(default)]
+    favorite: bool,
     preview: String,
     text: Option<String>,
     image: Option<ClipboardHistoryImage>,
@@ -202,6 +204,11 @@ pub fn set_clipboard_history_settings(
 #[tauri::command]
 pub fn copy_clipboard_history_item(id: String) -> Result<ClipboardHistorySnapshot, String> {
     service()?.copy_item(&id)
+}
+
+#[tauri::command]
+pub fn toggle_clipboard_history_favorite(id: String) -> Result<ClipboardHistorySnapshot, String> {
+    service()?.toggle_favorite(&id)
 }
 
 #[tauri::command]
@@ -342,6 +349,22 @@ impl ClipboardHistoryService {
         Ok(snapshot)
     }
 
+    fn toggle_favorite(&self, id: &str) -> Result<ClipboardHistorySnapshot, String> {
+        let mut state = self.state.lock().map_err(|error| error.to_string())?;
+        let item = state
+            .items
+            .iter_mut()
+            .find(|item| item.id == id)
+            .ok_or_else(|| "Clipboard history item was not found.".to_string())?;
+        item.favorite = !item.favorite;
+        self.persist_locked(&state)?;
+        let snapshot = Self::snapshot_locked(&state);
+        drop(state);
+
+        self.emit_changed();
+        Ok(snapshot)
+    }
+
     fn delete_item(&self, id: &str) -> Result<ClipboardHistorySnapshot, String> {
         let mut state = self.state.lock().map_err(|error| error.to_string())?;
         if let Some(index) = state.items.iter().position(|item| item.id == id) {
@@ -358,10 +381,10 @@ impl ClipboardHistoryService {
 
     fn clear(&self) -> Result<ClipboardHistorySnapshot, String> {
         let mut state = self.state.lock().map_err(|error| error.to_string())?;
-        for item in &state.items {
+        for item in state.items.iter().filter(|item| !item.favorite) {
             self.remove_item_files(item);
         }
-        state.items.clear();
+        state.items.retain(|item| item.favorite);
         self.persist_locked(&state)?;
         let snapshot = Self::snapshot_locked(&state);
         drop(state);
@@ -436,6 +459,7 @@ impl ClipboardHistoryService {
                 hash,
                 created_at: now,
                 copied_at: now,
+                favorite: false,
                 preview,
                 text: Some(text),
                 image: None,
@@ -453,6 +477,7 @@ impl ClipboardHistoryService {
                     hash,
                     created_at: now,
                     copied_at: now,
+                    favorite: false,
                     preview: format!("{width} x {height} image"),
                     text: None,
                     image: Some(image),
@@ -510,9 +535,17 @@ impl ClipboardHistoryService {
 
     fn enforce_limit_locked(&self, state: &mut ClipboardHistoryState) {
         while state.items.len() > state.settings.max_items {
-            if let Some(item) = state.items.pop() {
-                self.remove_item_files(&item);
-            }
+            let removal_index = state
+                .items
+                .iter()
+                .rposition(|item| !item.favorite)
+                .or_else(|| state.items.len().checked_sub(1));
+            let Some(removal_index) = removal_index else {
+                break;
+            };
+
+            let item = state.items.remove(removal_index);
+            self.remove_item_files(&item);
         }
     }
 

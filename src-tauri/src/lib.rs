@@ -342,6 +342,16 @@ fn save_todo_markdown(
 }
 
 #[tauri::command]
+fn get_default_todo_save_directory() -> Result<String, String> {
+    let home_dir = windows_home_dir()?;
+    Ok(home_dir
+        .join("Documents")
+        .join("FocuSD")
+        .to_string_lossy()
+        .to_string())
+}
+
+#[tauri::command]
 fn get_agent_status(app: AppHandle) -> Result<AgentStatusSnapshot, String> {
     let app_dir = app
         .path()
@@ -1234,6 +1244,7 @@ pub fn run() {
             set_island_layout,
             set_island_interaction,
             save_todo_markdown,
+            get_default_todo_save_directory,
             show_ready_island,
             minimize_island,
             get_launch_at_startup,
@@ -1248,6 +1259,7 @@ pub fn run() {
             clipboard_history::get_clipboard_history,
             clipboard_history::set_clipboard_history_settings,
             clipboard_history::copy_clipboard_history_item,
+            clipboard_history::toggle_clipboard_history_favorite,
             clipboard_history::delete_clipboard_history_item,
             clipboard_history::clear_clipboard_history
         ])
