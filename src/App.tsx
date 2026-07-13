@@ -242,7 +242,7 @@ const DEFAULT_SETTINGS: IslandSettings = {
   sizeScale: 1,
   marginY: 31,
   taskTextColor: DEFAULT_TASK_TEXT_COLOR,
-  pulseColor: "#ff8f70",
+  pulseColor: "#49e18f",
   pulseBrightness: 100,
   islandBackgroundColor: "#101013",
   todoBackgroundColor: "#ffffff",

@@ -42,8 +42,8 @@ input {
   --island-opacity: 0.92;
   --island-scale: 1;
   --task-text-color: #1afbff;
-  --island-pulse-color: #ff8f70;
-  --island-pulse-glow-color: rgba(255, 143, 112, 0.72);
+  --island-pulse-color: #49e18f;
+  --island-pulse-glow-color: rgba(73, 225, 143, 0.72);
   --island-pulse-brightness: 100%;
   --island-background-color: #101013;
   --todo-background-color: #f8f4e9;
