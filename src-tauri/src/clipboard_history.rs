@@ -50,6 +50,7 @@ const MAX_MAX_ITEMS: usize = 200;
 const SHORT_DUPLICATE_WINDOW_MS: i64 = 2_000;
 const MAX_IMAGE_PNG_BYTES: usize = 10 * 1024 * 1024;
 const THUMBNAIL_MAX_SIDE: u32 = 128;
+const MAX_NOTE_CHARACTERS: usize = 80;
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const CLIPBOARD_WRITE_RETRY_ATTEMPTS: usize = 8;
 const CLIPBOARD_WRITE_RETRY_DELAY: Duration = Duration::from_millis(35);
@@ -130,6 +131,8 @@ pub struct ClipboardHistoryItem {
     copied_at: i64,
     #[serde(default)]
     favorite: bool,
+    #[serde(default)]
+    note: String,
     preview: String,
     text: Option<String>,
     image: Option<ClipboardHistoryImage>,
@@ -209,6 +212,14 @@ pub fn copy_clipboard_history_item(id: String) -> Result<ClipboardHistorySnapsho
 #[tauri::command]
 pub fn toggle_clipboard_history_favorite(id: String) -> Result<ClipboardHistorySnapshot, String> {
     service()?.toggle_favorite(&id)
+}
+
+#[tauri::command]
+pub fn set_clipboard_history_item_note(
+    id: String,
+    note: String,
+) -> Result<ClipboardHistorySnapshot, String> {
+    service()?.set_note(&id, &note)
 }
 
 #[tauri::command]
@@ -365,6 +376,22 @@ impl ClipboardHistoryService {
         Ok(snapshot)
     }
 
+    fn set_note(&self, id: &str, note: &str) -> Result<ClipboardHistorySnapshot, String> {
+        let mut state = self.state.lock().map_err(|error| error.to_string())?;
+        let item = state
+            .items
+            .iter_mut()
+            .find(|item| item.id == id)
+            .ok_or_else(|| "Clipboard history item was not found.".to_string())?;
+        item.note = note.trim().chars().take(MAX_NOTE_CHARACTERS).collect();
+        self.persist_locked(&state)?;
+        let snapshot = Self::snapshot_locked(&state);
+        drop(state);
+
+        self.emit_changed();
+        Ok(snapshot)
+    }
+
     fn delete_item(&self, id: &str) -> Result<ClipboardHistorySnapshot, String> {
         let mut state = self.state.lock().map_err(|error| error.to_string())?;
         if let Some(index) = state.items.iter().position(|item| item.id == id) {
@@ -460,6 +487,7 @@ impl ClipboardHistoryService {
                 created_at: now,
                 copied_at: now,
                 favorite: false,
+                note: String::new(),
                 preview,
                 text: Some(text),
                 image: None,
@@ -478,6 +506,7 @@ impl ClipboardHistoryService {
                     created_at: now,
                     copied_at: now,
                     favorite: false,
+                    note: String::new(),
                     preview: format!("{width} x {height} image"),
                     text: None,
                     image: Some(image),

@@ -1346,6 +1346,7 @@ pub fn run() {
             clipboard_history::set_clipboard_history_settings,
             clipboard_history::copy_clipboard_history_item,
             clipboard_history::toggle_clipboard_history_favorite,
+            clipboard_history::set_clipboard_history_item_note,
             clipboard_history::delete_clipboard_history_item,
             clipboard_history::clear_clipboard_history
         ])

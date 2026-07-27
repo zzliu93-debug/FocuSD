@@ -918,7 +918,7 @@ input {
 .clipboard-item {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 132px) auto;
   align-items: center;
   gap: 8px;
   padding: 7px;
@@ -944,6 +944,8 @@ input {
 }
 
 .clipboard-item__main:focus-visible,
+.clipboard-item__note button:focus-visible,
+.clipboard-note-editor input:focus-visible,
 .clipboard-item__actions button:focus-visible,
 .clipboard-clear-button:focus-visible,
 .clipboard-segments button:focus-visible,
@@ -992,6 +994,97 @@ input {
   font-weight: 800;
   line-height: 1.32;
   overflow-wrap: anywhere;
+}
+
+.clipboard-item__note {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.clipboard-note {
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  color: rgba(248, 244, 233, 0.48);
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  outline: none;
+  cursor: pointer;
+}
+
+.clipboard-note span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.clipboard-note--filled {
+  color: #f8e7a8;
+  background: rgba(255, 209, 102, 0.1);
+  border-color: rgba(255, 209, 102, 0.34);
+  border-style: solid;
+}
+
+.clipboard-note:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.clipboard-note-editor {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px 24px;
+  align-items: center;
+  gap: 4px;
+}
+
+.clipboard-note-editor input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  color: #fff8e6;
+  background: rgba(18, 16, 13, 0.52);
+  border: 1px solid rgba(255, 209, 102, 0.48);
+  border-radius: 7px;
+  outline: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.clipboard-note-editor button {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: rgba(248, 244, 233, 0.72);
+  background: rgba(255, 255, 255, 0.09);
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+
+.clipboard-note-editor button[type="submit"] {
+  color: #181410;
+  background: #ffd166;
+}
+
+.clipboard-note-editor button:disabled,
+.clipboard-note-editor input:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .clipboard-item__actions {

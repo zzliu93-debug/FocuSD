@@ -23,6 +23,7 @@ import {
   Keyboard,
   Minus,
   NotebookPen,
+  Pencil,
   Pause,
   Play,
   Plus,
@@ -104,6 +105,7 @@ type ClipboardHistoryItem = {
   createdAt: number;
   copiedAt: number;
   favorite?: boolean;
+  note?: string;
   preview: string;
   text?: string;
   image?: ClipboardHistoryImage;
@@ -2476,18 +2478,23 @@ function ClipboardHistoryPanel({
   snapshot,
   onCopyItem,
   onToggleFavorite,
+  onUpdateNote,
   onDeleteItem,
   onClear,
 }: {
   snapshot: ClipboardHistorySnapshot;
   onCopyItem: (id: string) => Promise<boolean> | boolean;
   onToggleFavorite: (id: string) => Promise<void> | void;
+  onUpdateNote: (id: string, note: string) => Promise<boolean> | boolean;
   onDeleteItem: (id: string) => Promise<void> | void;
   onClear: () => Promise<void> | void;
 }) {
   const [query, setQuery] = useState("");
   const [clipboardView, setClipboardView] = useState<"all" | "favorites">("all");
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [isSavingNote, setIsSavingNote] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const copiedResetRef = useRef<number | null>(null);
@@ -2510,11 +2517,12 @@ function ClipboardHistoryPanel({
       const haystack = [
         item.preview,
         item.text ?? "",
+        item.note ?? "",
       ]
         .join(" ")
         .toLowerCase();
 
-      return item.kind === "text" && haystack.includes(normalizedQuery);
+      return haystack.includes(normalizedQuery);
     });
   }, [normalizedQuery, viewedItems]);
 
@@ -2664,7 +2672,16 @@ function ClipboardHistoryPanel({
     if (snapshot.items.length === 0) {
       setIsConfirmingClear(false);
     }
-  }, [confirmDeleteId, snapshot.items]);
+
+    if (
+      editingNoteId &&
+      !snapshot.items.some((item) => item.id === editingNoteId)
+    ) {
+      setEditingNoteId(null);
+      setNoteDraft("");
+      setIsSavingNote(false);
+    }
+  }, [confirmDeleteId, editingNoteId, snapshot.items]);
 
   const showCopiedState = useCallback((id: string) => {
     setCopiedItemId(id);
@@ -2696,6 +2713,39 @@ function ClipboardHistoryPanel({
       void Promise.resolve(onToggleFavorite(id));
     },
     [onToggleFavorite],
+  );
+
+  const startEditingNote = useCallback((item: ClipboardHistoryItem) => {
+    setConfirmDeleteId(null);
+    setEditingNoteId(item.id);
+    setNoteDraft(item.note ?? "");
+  }, []);
+
+  const cancelEditingNote = useCallback(() => {
+    if (isSavingNote) {
+      return;
+    }
+
+    setEditingNoteId(null);
+    setNoteDraft("");
+  }, [isSavingNote]);
+
+  const saveNote = useCallback(
+    (id: string) => {
+      if (isSavingNote) {
+        return;
+      }
+
+      setIsSavingNote(true);
+      void Promise.resolve(onUpdateNote(id, noteDraft)).then((didSave) => {
+        setIsSavingNote(false);
+        if (didSave) {
+          setEditingNoteId(null);
+          setNoteDraft("");
+        }
+      });
+    },
+    [isSavingNote, noteDraft, onUpdateNote],
   );
 
   const handleDeleteItem = useCallback(
@@ -2790,8 +2840,8 @@ function ClipboardHistoryPanel({
         <Search size={15} strokeWidth={2.2} />
         <input
           value={query}
-          placeholder="搜索文字"
-          aria-label="搜索剪贴板文字"
+          placeholder="搜索内容或备注"
+          aria-label="搜索剪贴板内容或备注"
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
         {query && (
@@ -2852,6 +2902,61 @@ function ClipboardHistoryPanel({
                   <span className="clipboard-item__preview">{item.preview}</span>
                 </span>
               </button>
+              <div className="clipboard-item__note">
+                {editingNoteId === item.id ? (
+                  <form
+                    className="clipboard-note-editor"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      saveNote(item.id);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={noteDraft}
+                      maxLength={80}
+                      placeholder="备注这是什么"
+                      aria-label="剪贴记录备注"
+                      disabled={isSavingNote}
+                      onChange={(event) => setNoteDraft(event.currentTarget.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          cancelEditingNote();
+                        }
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      title="保存备注"
+                      aria-label="保存备注"
+                      disabled={isSavingNote}
+                    >
+                      <Check size={13} strokeWidth={2.6} />
+                    </button>
+                    <button
+                      type="button"
+                      title="取消编辑"
+                      aria-label="取消编辑备注"
+                      disabled={isSavingNote}
+                      onClick={cancelEditingNote}
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    className={item.note ? "clipboard-note clipboard-note--filled" : "clipboard-note"}
+                    type="button"
+                    title={item.note ? `编辑备注：${item.note}` : "添加备注"}
+                    aria-label={item.note ? `编辑备注：${item.note}` : "添加剪贴记录备注"}
+                    onClick={() => startEditingNote(item)}
+                  >
+                    <Pencil size={12} strokeWidth={2.3} />
+                    <span>{item.note || "备注"}</span>
+                  </button>
+                )}
+              </div>
               <div className="clipboard-item__actions">
                 <button
                   className={[
@@ -3214,6 +3319,23 @@ function App() {
       console.error("Failed to toggle clipboard history favorite", error);
     }
   }, []);
+
+  const updateClipboardHistoryItemNote = useCallback(
+    async (id: string, note: string) => {
+      try {
+        const snapshot = await invoke<ClipboardHistorySnapshot>(
+          "set_clipboard_history_item_note",
+          { id, note },
+        );
+        setClipboardHistory(snapshot);
+        return true;
+      } catch (error) {
+        console.error("Failed to update clipboard history item note", error);
+        return false;
+      }
+    },
+    [],
+  );
 
   const deleteClipboardHistoryItem = useCallback(async (id: string) => {
     try {
@@ -4201,6 +4323,7 @@ function App() {
             snapshot={clipboardHistory}
             onCopyItem={copyClipboardHistoryItem}
             onToggleFavorite={(id) => void toggleClipboardHistoryFavorite(id)}
+            onUpdateNote={updateClipboardHistoryItemNote}
             onDeleteItem={(id) => void deleteClipboardHistoryItem(id)}
             onClear={() => void clearClipboardHistoryItems()}
           />
