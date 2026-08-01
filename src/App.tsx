@@ -3032,6 +3032,8 @@ function App() {
   const [agentStatus, setAgentStatus] =
     useState<AgentStatusSnapshot>(DEFAULT_AGENT_STATUS);
   const isRefreshingAgentStatus = useRef(false);
+  const isRefreshingMediaState = useRef(false);
+  const isRefreshingAudioLevel = useRef(false);
   const mediaStatusLockUntil = useRef(0);
   const [settings, setSettings] = useState<IslandSettings>(loadSettings);
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
@@ -3418,6 +3420,12 @@ function App() {
   }, [setIslandMode]);
 
   const refreshMediaState = useCallback(async () => {
+    if (isRefreshingMediaState.current) {
+      return;
+    }
+
+    isRefreshingMediaState.current = true;
+
     try {
       const nextMediaState = await invoke<MediaState>("get_media_state");
 
@@ -3454,6 +3462,8 @@ function App() {
         audioPeak: currentState.audioPeak * 0.72,
         playbackStatus: currentState.audioActive ? "playing" : "unavailable",
       }));
+    } finally {
+      isRefreshingMediaState.current = false;
     }
   }, []);
 
@@ -3498,6 +3508,12 @@ function App() {
     let didCancel = false;
 
     const refreshAudioLevel = async () => {
+      if (didCancel || isRefreshingAudioLevel.current) {
+        return;
+      }
+
+      isRefreshingAudioLevel.current = true;
+
       try {
         const audioLevel = await invoke<AudioLevel>("get_audio_level");
 
@@ -3533,6 +3549,8 @@ function App() {
         });
       } catch (error) {
         console.error("Failed to read audio level", error);
+      } finally {
+        isRefreshingAudioLevel.current = false;
       }
     };
 
@@ -3934,6 +3952,7 @@ function App() {
   useEffect(() => {
     void refreshClipboardHistory();
 
+    let didCancel = false;
     let unlistenChanges: (() => void) | null = null;
     let unlistenShortcut: (() => void) | null = null;
 
@@ -3941,7 +3960,11 @@ function App() {
       void refreshClipboardHistory();
     })
       .then((nextUnlisten) => {
-        unlistenChanges = nextUnlisten;
+        if (didCancel) {
+          nextUnlisten();
+        } else {
+          unlistenChanges = nextUnlisten;
+        }
       })
       .catch((error) => {
         console.error("Failed to listen for clipboard history changes", error);
@@ -3951,13 +3974,18 @@ function App() {
       toggleClipboardHistory();
     })
       .then((nextUnlisten) => {
-        unlistenShortcut = nextUnlisten;
+        if (didCancel) {
+          nextUnlisten();
+        } else {
+          unlistenShortcut = nextUnlisten;
+        }
       })
       .catch((error) => {
         console.error("Failed to listen for clipboard history shortcut", error);
       });
 
     return () => {
+      didCancel = true;
       unlistenChanges?.();
       unlistenShortcut?.();
     };
@@ -4221,6 +4249,7 @@ function App() {
   }, [clipboardHistory.settings.shortcut, collapseIsland, toggleClipboardHistory]);
 
   useEffect(() => {
+    let didCancel = false;
     let unlisten: (() => void) | null = null;
 
     void getCurrentWindow()
@@ -4230,13 +4259,18 @@ function App() {
         }
       })
       .then((nextUnlisten) => {
-        unlisten = nextUnlisten;
+        if (didCancel) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
       })
       .catch((error) => {
         console.error("Failed to listen for island focus changes", error);
       });
 
     return () => {
+      didCancel = true;
       unlisten?.();
     };
   }, [collapseIsland, mode]);
