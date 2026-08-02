@@ -16,7 +16,7 @@
   </p>
 
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.1.8-blue">
+    <img alt="Version" src="https://img.shields.io/badge/version-0.1.9-blue">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0078D4">
     <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB">
     <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB">
@@ -135,8 +135,8 @@ pnpm tauri build
 构建完成后，安装包通常位于：
 
 ```text
-src-tauri/target/release/bundle/nsis/FocuSD Island_0.1.8_x64-setup.exe
-src-tauri/target/release/bundle/msi/FocuSD Island_0.1.8_x64_en-US.msi
+src-tauri/target/release/bundle/nsis/FocuSD Island_0.1.9_x64-setup.exe
+src-tauri/target/release/bundle/msi/FocuSD Island_0.1.9_x64_en-US.msi
 ```
 
 原始可执行文件通常位于：
