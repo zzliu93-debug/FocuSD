@@ -200,6 +200,10 @@ const DAILY_NOTE_STORAGE_KEY = "focusd-island-daily-note";
 const TODO_SAVE_DIRECTORY_STORAGE_KEY = "focusd-island-save-directory";
 const TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY =
   "focusd-island-last-saved-signature";
+const MIN_COLLAPSED_ISLAND_WIDTH = 240;
+const MAX_COLLAPSED_ISLAND_WIDTH = 320;
+const MIN_COLLAPSED_TEXT_UNITS = 2;
+const MAX_COLLAPSED_TEXT_UNITS = 12;
 const BASE_EXPANDED_ISLAND_HEIGHT = 306;
 const TODO_ARCHIVE_EXPANDED_ISLAND_HEIGHT = 352;
 const MUSIC_EXPANDED_ISLAND_HEIGHT = 286;
@@ -598,6 +602,30 @@ function getTodoTitleLineCount(title: string) {
     Math.ceil(visualLength / TODO_TITLE_CHARACTERS_PER_LINE),
     1,
     TODO_MAX_ESTIMATED_TITLE_LINES,
+  );
+}
+
+function getCollapsedIslandWidth(text: string) {
+  const visualUnits = Array.from(text.trim()).reduce((total, character) => {
+    if (/\s/.test(character)) {
+      return total + 0.35;
+    }
+
+    return total + (character.charCodeAt(0) <= 255 ? 0.55 : 1);
+  }, 0);
+  const widthProgress =
+    (clamp(
+      visualUnits,
+      MIN_COLLAPSED_TEXT_UNITS,
+      MAX_COLLAPSED_TEXT_UNITS,
+    ) -
+      MIN_COLLAPSED_TEXT_UNITS) /
+    (MAX_COLLAPSED_TEXT_UNITS - MIN_COLLAPSED_TEXT_UNITS);
+
+  return Math.round(
+    MIN_COLLAPSED_ISLAND_WIDTH +
+      widthProgress *
+        (MAX_COLLAPSED_ISLAND_WIDTH - MIN_COLLAPSED_ISLAND_WIDTH),
   );
 }
 
@@ -3241,6 +3269,24 @@ function App() {
   const didShowInitialWindow = useRef(false);
   const selectedArchive =
     archives.find((archive) => archive.date === selectedArchiveDate) ?? null;
+  const activeTaskTitle = useMemo(() => {
+    const activeTodo = todos.find(
+      (todo) => todo.id === activeTodoId && !todo.completed,
+    );
+
+    return activeTodo?.title ?? null;
+  }, [activeTodoId, todos]);
+  const openTodoCount = useMemo(
+    () => todos.filter((todo) => !todo.completed).length,
+    [todos],
+  );
+  const collapsedIslandWidth = useMemo(
+    () =>
+      getCollapsedIslandWidth(
+        activeTaskTitle ?? `剩余${openTodoCount}个待办`,
+      ),
+    [activeTaskTitle, openTodoCount],
+  );
   const isTodoArchivePage =
     page === "todo" && (todoPageMode === "archive" || todoPageMode === "review");
   const visibleTodoRows = Math.min(
@@ -3284,6 +3330,7 @@ function App() {
       return ({
         "--island-opacity": settings.opacity / 100,
         "--island-scale": settings.sizeScale,
+        "--collapsed-island-width": `${collapsedIslandWidth}px`,
         "--expanded-island-height": `${expandedIslandHeight}px`,
         "--task-text-color": settings.taskTextColor,
         "--island-pulse-color": settings.pulseColor,
@@ -3314,6 +3361,7 @@ function App() {
     },
     [
       expandedIslandHeight,
+      collapsedIslandWidth,
       settings.glassIntensity,
       settings.islandBackgroundColor,
       settings.opacity,
@@ -3384,6 +3432,7 @@ function App() {
       nextMode: IslandMode,
       nextSettings: IslandSettings,
       nextExpandedHeight: number,
+      nextCollapsedWidth: number,
       nextIsTucked: boolean,
     ) => {
       try {
@@ -3394,6 +3443,7 @@ function App() {
           sizeScale: nextSettings.sizeScale,
           marginY: nextSettings.marginY,
           expandedHeight: nextExpandedHeight,
+          collapsedWidth: nextCollapsedWidth,
           isTucked: nextIsTucked,
             glassEnabled: nextSettings.appearanceMode === "liquidGlass",
             glassIntensity: nextSettings.glassIntensity,
@@ -4453,12 +4503,14 @@ function App() {
       mode,
       settings,
       expandedIslandHeight,
+      collapsedIslandWidth,
       isTucked,
     ).finally(() => {
       void showReadyIsland();
     });
   }, [
     expandedIslandHeight,
+    collapsedIslandWidth,
     isTucked,
     mode,
     settings.marginY,
@@ -4514,17 +4566,6 @@ function App() {
     };
   }, [collapseIsland, mode]);
 
-  const activeTaskTitle = useMemo(() => {
-    const activeTodo = todos.find(
-      (todo) => todo.id === activeTodoId && !todo.completed,
-    );
-
-    return activeTodo?.title ?? null;
-  }, [activeTodoId, todos]);
-  const openTodoCount = useMemo(
-    () => todos.filter((todo) => !todo.completed).length,
-    [todos],
-  );
   const agentVisualState = useMemo(
     () => getAgentVisualState(agentStatus),
     [agentStatus],

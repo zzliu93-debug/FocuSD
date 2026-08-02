@@ -32,6 +32,7 @@ const STAGE_WINDOW_WIDTH: f64 = 820.0;
 const STAGE_WINDOW_HEIGHT: f64 = 460.0;
 const DEFAULT_MARGIN_Y: f64 = 12.0;
 const DEFAULT_SCALE: f64 = 1.0;
+const MIN_COLLAPSED_ISLAND_WIDTH: f64 = 240.0;
 const COLLAPSED_ISLAND_WIDTH: f64 = 320.0;
 const COLLAPSED_ISLAND_HEIGHT: f64 = 58.0;
 const EXPANDED_ISLAND_WIDTH: f64 = 560.0;
@@ -80,9 +81,9 @@ impl IslandMode {
         }
     }
 
-    fn base_size(self, expanded_height: f64) -> (f64, f64) {
+    fn base_size(self, collapsed_width: f64, expanded_height: f64) -> (f64, f64) {
         match self {
-            Self::Collapsed => (COLLAPSED_ISLAND_WIDTH, COLLAPSED_ISLAND_HEIGHT),
+            Self::Collapsed => (collapsed_width, COLLAPSED_ISLAND_HEIGHT),
             Self::Expanded => (EXPANDED_ISLAND_WIDTH, expanded_height),
         }
     }
@@ -101,6 +102,7 @@ struct IslandWindowState {
     is_tucked: bool,
     size_scale: f64,
     margin_y: f64,
+    collapsed_width: f64,
     expanded_height: f64,
     glass_enabled: bool,
     glass_intensity: f64,
@@ -123,6 +125,7 @@ impl Default for IslandWindowState {
             is_tucked: false,
             size_scale: DEFAULT_SCALE,
             margin_y: DEFAULT_MARGIN_Y,
+            collapsed_width: COLLAPSED_ISLAND_WIDTH,
             expanded_height: DEFAULT_EXPANDED_ISLAND_HEIGHT,
             glass_enabled: false,
             glass_intensity: 72.0,
@@ -217,6 +220,7 @@ fn set_island_interaction(
     size_scale: f64,
     margin_y: Option<f64>,
     expanded_height: Option<f64>,
+    collapsed_width: Option<f64>,
     is_tucked: Option<bool>,
     glass_enabled: Option<bool>,
     glass_intensity: Option<f64>,
@@ -237,6 +241,10 @@ fn set_island_interaction(
                 DEFAULT_EXPANDED_ISLAND_HEIGHT,
                 DEFAULT_EXPANDED_ISLAND_HEIGHT + EXPANDED_ISLAND_HEIGHT_RANGE,
             );
+        }
+        if let Some(collapsed_width) = collapsed_width {
+            state.collapsed_width =
+                collapsed_width.clamp(MIN_COLLAPSED_ISLAND_WIDTH, COLLAPSED_ISLAND_WIDTH);
         }
         state.glass_enabled = glass_enabled.unwrap_or(false);
         if let Some(glass_intensity) = glass_intensity {
@@ -1065,7 +1073,9 @@ fn parse_hex_color(value: &str) -> Option<(u8, u8, u8)> {
 }
 
 fn calculate_glass_region(state: IslandWindowState, scale_factor: f64) -> GlassRegion {
-    let (base_width, base_height) = state.mode.base_size(state.expanded_height);
+    let (base_width, base_height) = state
+        .mode
+        .base_size(state.collapsed_width, state.expanded_height);
     let stage_width = STAGE_WINDOW_WIDTH * scale_factor;
     let width = base_width * state.size_scale * scale_factor;
     let height = base_height * state.size_scale * scale_factor;
@@ -1243,7 +1253,9 @@ fn apply_glass_material(
 }
 
 fn apply_stage_geometry(window: &WebviewWindow, state: IslandWindowState) -> Result<(), String> {
-    let (_, base_height) = state.mode.base_size(state.expanded_height);
+    let (_, base_height) = state
+        .mode
+        .base_size(state.collapsed_width, state.expanded_height);
     let stage_height =
         STAGE_WINDOW_HEIGHT.max((base_height * state.size_scale).ceil() + STAGE_WINDOW_PADDING_Y);
 
@@ -1338,7 +1350,9 @@ fn cursor_is_inside_island(window: &WebviewWindow) -> bool {
         }
     }
 
-    let (base_width, base_height) = state.mode.base_size(state.expanded_height);
+    let (base_width, base_height) = state
+        .mode
+        .base_size(state.collapsed_width, state.expanded_height);
     let island_width = base_width * state.size_scale * physical_scale;
     let island_height = base_height * state.size_scale * physical_scale;
     let island_left = (window_width - island_width) / 2.0;
@@ -1425,6 +1439,17 @@ mod tests {
         assert_eq!(region_150.right, 856);
         assert_eq!(region_150.bottom, 88);
         assert_eq!(region_150.diameter, 87);
+    }
+
+    #[test]
+    fn collapsed_region_uses_dynamic_minimum_width() {
+        let mut minimum = state(IslandMode::Collapsed, 1.0, DEFAULT_EXPANDED_ISLAND_HEIGHT);
+        minimum.collapsed_width = MIN_COLLAPSED_ISLAND_WIDTH;
+
+        let region = calculate_glass_region(minimum, 1.25);
+        assert_eq!(region.left, 363);
+        assert_eq!(region.right, 664);
+        assert_eq!(region.bottom, 74);
     }
 
     #[test]
