@@ -804,6 +804,10 @@ input {
     transform 80ms linear;
 }
 
+.music-player--paused .music-player__wave span {
+  transition: none;
+}
+
 .island--appearance-liquidGlass .music-player__wave {
   position: relative;
   isolation: isolate;
@@ -927,11 +931,11 @@ input {
   opacity: 0.36;
 }
 
-.music-control-button__pending {
-  animation: music-control-spin 700ms linear infinite;
+.music-control-button__track-change {
+  animation: music-control-track-change 700ms linear infinite;
 }
 
-@keyframes music-control-spin {
+@keyframes music-control-track-change {
   to {
     transform: rotate(360deg);
   }
@@ -3402,7 +3406,7 @@ input {
     animation: none;
   }
 
-  .music-control-button__pending {
+  .music-control-button__track-change {
     animation: none;
   }
 

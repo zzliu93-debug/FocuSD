@@ -2457,14 +2457,14 @@ function ArchiveBrowser({
 
 function MusicPlayerPanel({
   mediaState,
-  commandPending,
+  isTrackChanging,
   commandError,
   onPlayPause,
   onNext,
   onPrevious,
 }: {
   mediaState: MediaState;
-  commandPending: boolean;
+  isTrackChanging: boolean;
   commandError: string | null;
   onPlayPause: () => void;
   onNext: () => void;
@@ -2516,7 +2516,6 @@ function MusicPlayerPanel({
           title="Previous"
           aria-label="Previous track"
           onClick={onPrevious}
-          disabled={commandPending}
         >
           <SkipBack size={18} strokeWidth={2.4} />
         </button>
@@ -2525,13 +2524,12 @@ function MusicPlayerPanel({
           type="button"
           title={isPlaying ? "Pause" : "Play"}
           aria-label={isPlaying ? "Pause" : "Play"}
-          aria-busy={commandPending}
+          aria-busy={isTrackChanging}
           onClick={onPlayPause}
-          disabled={commandPending}
         >
-          {commandPending ? (
+          {isTrackChanging ? (
             <RefreshCcw
-              className="music-control-button__pending"
+              className="music-control-button__track-change"
               size={19}
               strokeWidth={2.4}
             />
@@ -2547,7 +2545,6 @@ function MusicPlayerPanel({
           title="Next"
           aria-label="Next track"
           onClick={onNext}
-          disabled={commandPending}
         >
           <SkipForward size={18} strokeWidth={2.4} />
         </button>
@@ -2571,7 +2568,7 @@ function MusicLevelWave({
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   useEffect(() => {
-    if (!isAvailable && !isPlaying) {
+    if (!isPlaying) {
       setPhase(0);
       return;
     }
@@ -2591,6 +2588,10 @@ function MusicLevelWave({
     : 0;
   const bars = [0.22, 0.48, 0.78, 0.54, 0.92, 0.68, 0.4, 0.72, 0.34].map(
     (bar, index) => {
+      if (!isPlaying) {
+        return 0.2;
+      }
+
       const floor = isAvailable ? 0.2 : 0.14 + bar * 0.2;
       const breath =
         isAvailable && !prefersReducedMotion
@@ -3177,7 +3178,7 @@ function App() {
   const [page, setPage] = useState<IslandPage>("todo");
   const [mediaState, setMediaState] =
     useState<MediaState>(DEFAULT_MEDIA_STATE);
-  const [mediaCommandPending, setMediaCommandPending] = useState(false);
+  const [isMediaTrackChanging, setIsMediaTrackChanging] = useState(false);
   const [mediaCommandError, setMediaCommandError] = useState<string | null>(
     null,
   );
@@ -3187,6 +3188,10 @@ function App() {
   const isRefreshingMediaState = useRef(false);
   const isRefreshingAudioLevel = useRef(false);
   const isRunningMediaCommand = useRef(false);
+  const mediaPlaybackIntent = useRef<{
+    status: MediaPlaybackStatus;
+    expiresAt: number;
+  } | null>(null);
   const [settings, setSettings] = useState<IslandSettings>(loadSettings);
   const [nativeGlassState, setNativeGlassState] =
     useState<NativeGlassState>("disabled");
@@ -3621,6 +3626,25 @@ function App() {
       const nextMediaState = await invoke<MediaState>("get_media_state");
 
       setMediaState((currentState) => {
+        const intent = mediaPlaybackIntent.current;
+        const playbackStatus =
+          intent && Date.now() < intent.expiresAt
+            ? intent.status
+            : nextMediaState.playbackStatus;
+
+        if (intent && Date.now() >= intent.expiresAt) {
+          mediaPlaybackIntent.current = null;
+        }
+
+        if (playbackStatus === "paused") {
+          return {
+            ...nextMediaState,
+            audioActive: false,
+            audioPeak: 0,
+            playbackStatus,
+          };
+        }
+
         const nextPeak = Math.max(
           currentState.audioPeak * 0.82,
           nextMediaState.audioPeak,
@@ -3632,6 +3656,7 @@ function App() {
           ...nextMediaState,
           audioActive,
           audioPeak: audioActive ? nextPeak : 0,
+          playbackStatus,
         };
       });
     } catch (error) {
@@ -3648,22 +3673,68 @@ function App() {
         return;
       }
 
+      const isPlayPause = command === "media_play_pause";
+      const isCurrentlyPlaying = mediaState.playbackStatus === "playing";
+      const intendedStatus: MediaPlaybackStatus = isPlayPause
+        ? isCurrentlyPlaying
+          ? "paused"
+          : "playing"
+        : mediaState.playbackStatus;
+
+      mediaPlaybackIntent.current = {
+        status: intendedStatus,
+        expiresAt: Date.now() + (isPlayPause ? 1200 : 1800),
+      };
+
+      if (isPlayPause) {
+        setMediaState((currentState) => ({
+          ...currentState,
+          available: intendedStatus === "playing" || currentState.available,
+          audioActive:
+            intendedStatus === "playing" && currentState.audioActive,
+          audioPeak: intendedStatus === "paused" ? 0 : currentState.audioPeak,
+          playbackStatus: intendedStatus,
+          updatedAt: Date.now(),
+        }));
+      }
+
       isRunningMediaCommand.current = true;
-      setMediaCommandPending(true);
+      setIsMediaTrackChanging(!isPlayPause);
       setMediaCommandError(null);
       try {
         const nextMediaState = await invoke<MediaState>(command);
-        setMediaState(nextMediaState);
+        setMediaState((currentState) => {
+          if (intendedStatus === "paused") {
+            return {
+              ...nextMediaState,
+              audioActive: false,
+              audioPeak: 0,
+              playbackStatus: intendedStatus,
+            };
+          }
+
+          return {
+            ...nextMediaState,
+            audioActive:
+              nextMediaState.audioActive || currentState.audioActive,
+            audioPeak: Math.max(
+              nextMediaState.audioPeak,
+              currentState.audioPeak * 0.82,
+            ),
+            playbackStatus: intendedStatus,
+          };
+        });
       } catch (error) {
         console.error(`Failed to run media command: ${command}`, error);
         setMediaCommandError(String(error));
+        mediaPlaybackIntent.current = null;
         await refreshMediaState();
       } finally {
         isRunningMediaCommand.current = false;
-        setMediaCommandPending(false);
+        setIsMediaTrackChanging(false);
       }
     },
-    [refreshMediaState],
+    [mediaState.audioActive, mediaState.playbackStatus, refreshMediaState],
   );
 
   useEffect(() => {
@@ -3684,6 +3755,21 @@ function App() {
         }
 
         setMediaState((currentState) => {
+          const intent = mediaPlaybackIntent.current;
+          const isPauseIntent =
+            intent &&
+            Date.now() < intent.expiresAt &&
+            intent.status === "paused";
+
+          if (currentState.playbackStatus === "paused" || isPauseIntent) {
+            return {
+              ...currentState,
+              audioActive: false,
+              audioPeak: 0,
+              playbackStatus: "paused",
+            };
+          }
+
           const decayedPeak = currentState.audioPeak * 0.82;
           const nextPeak = audioLevel.active
             ? Math.max(decayedPeak, audioLevel.peak)
@@ -4502,7 +4588,7 @@ function App() {
         {page === "music" && (
           <MusicPlayerPanel
             mediaState={mediaState}
-            commandPending={mediaCommandPending}
+            isTrackChanging={isMediaTrackChanging}
             commandError={mediaCommandError}
             onPlayPause={() => void runMediaCommand("media_play_pause")}
             onNext={() => void runMediaCommand("media_next")}
