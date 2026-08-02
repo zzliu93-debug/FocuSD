@@ -47,6 +47,9 @@ input {
   --island-pulse-brightness: 100%;
   --island-background-color: #101013;
   --todo-background-color: #f8f4e9;
+  --glass-intensity: 0.72;
+  --glass-mask-opacity: 0.53;
+  --glass-tint-color: rgba(16, 16, 19, 0.53);
   width: 100vw;
   height: 100vh;
   display: flex;
@@ -57,6 +60,9 @@ input {
 }
 
 .island {
+  --glass-pointer-x: 50%;
+  --glass-pointer-y: 18%;
+  --glass-page-accent: 116, 214, 255;
   position: relative;
   flex: 0 0 auto;
   color: #f8f6f0;
@@ -86,6 +92,123 @@ input {
     background 160ms ease;
 }
 
+.island--music {
+  --glass-page-accent: 182, 156, 255;
+}
+
+.island--clipboard {
+  --glass-page-accent: 255, 209, 102;
+}
+
+.island--layout {
+  --glass-page-accent: 153, 214, 230;
+}
+
+.island__glass {
+  display: none;
+}
+
+.island--appearance-liquidGlass {
+  isolation: isolate;
+  opacity: 1;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, var(--glass-soft-alpha)),
+      transparent 42%
+    ),
+    linear-gradient(
+      165deg,
+      transparent 38%,
+      rgba(0, 0, 0, calc(0.13 + var(--glass-intensity) * 0.11))
+    ),
+    var(--glass-tint-color);
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, var(--glass-shadow-alpha)),
+    inset 0 1px 0 rgba(255, 255, 255, var(--glass-inset-alpha)),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    inset 1px 0 0 rgba(130, 224, 255, var(--glass-cyan-alpha)),
+    inset -1px 0 0 rgba(255, 158, 230, var(--glass-magenta-alpha));
+}
+
+.island--appearance-liquidGlass.island--glass-css-fallback {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 42%),
+    linear-gradient(165deg, transparent 34%, rgba(0, 0, 0, 0.32)),
+    var(--glass-tint-color);
+}
+
+.island--appearance-liquidGlass .island__glass {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.island__glass::before,
+.island__glass::after,
+.island__glass-refraction,
+.island__glass-highlight {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.island__glass::before {
+  width: 48%;
+  aspect-ratio: 1;
+  left: var(--glass-pointer-x);
+  top: var(--glass-pointer-y);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, var(--glass-glow-alpha)),
+    rgba(var(--glass-page-accent), var(--glass-accent-alpha)) 38%,
+    transparent 70%
+  );
+  filter: blur(20px);
+  opacity: 0.9;
+  transform: translate(-50%, -50%);
+  transition:
+    left 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.island__glass::after {
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(112deg, rgba(116, 214, 255, 0.1), transparent 16% 82%, rgba(255, 156, 224, 0.08)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 20% 78%, rgba(0, 0, 0, 0.16));
+  mix-blend-mode: screen;
+  opacity: var(--glass-refraction-opacity);
+}
+
+.island__glass-refraction {
+  inset: 1px;
+  border: 1px solid rgba(255, 255, 255, var(--glass-border-alpha));
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 14px rgba(var(--glass-page-accent), var(--glass-inner-accent-alpha)),
+    inset 0 0 2px rgba(255, 255, 255, 0.24);
+}
+
+.island__glass-highlight {
+  top: 2px;
+  left: var(--glass-pointer-x);
+  width: 42%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.82), transparent);
+  filter: blur(0.4px);
+  opacity: var(--glass-highlight-opacity);
+  transform: translateX(-50%);
+  transition: left 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .island--expanded.island--todo {
   color: #f8f4e9;
 }
@@ -99,6 +222,19 @@ input {
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.22)),
     var(--island-background-color);
   box-shadow: none;
+}
+
+.island--appearance-liquidGlass.island--collapsed {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), transparent 42%),
+    linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.24)),
+    var(--glass-tint-color);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.27),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    inset 1px 0 0 rgba(116, 214, 255, 0.14),
+    inset -1px 0 0 rgba(255, 156, 224, 0.08);
 }
 
 .island--expanded {
@@ -994,6 +1130,35 @@ input {
   font-weight: 800;
   line-height: 1.32;
   overflow-wrap: anywhere;
+}
+
+.island--appearance-liquidGlass .music-player,
+.island--appearance-liquidGlass .clipboard-panel,
+.island--appearance-liquidGlass .editor-panel {
+  background:
+    radial-gradient(
+      circle at var(--glass-pointer-x) var(--glass-pointer-y),
+      rgba(var(--glass-page-accent), var(--glass-panel-accent-alpha)),
+      transparent 36%
+    ),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.025)),
+    rgba(7, 9, 12, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(1.12);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(1.12);
+}
+
+.island--appearance-liquidGlass.island--glass-css-fallback .music-player,
+.island--appearance-liquidGlass.island--glass-css-fallback .clipboard-panel,
+.island--appearance-liquidGlass.island--glass-css-fallback .editor-panel {
+  background:
+    radial-gradient(circle at 82% 12%, rgba(var(--glass-page-accent), 0.13), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.03)),
+    rgba(9, 11, 15, 0.78);
 }
 
 .clipboard-item__note {
@@ -2400,6 +2565,65 @@ input {
   line-height: 1;
 }
 
+.appearance-mode-control {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: rgba(248, 246, 240, 0.68);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.appearance-mode-control__segments {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 174px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.appearance-mode-control__segments button {
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  overflow: hidden;
+  color: rgba(248, 246, 240, 0.58);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.appearance-mode-control__segments button:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.appearance-mode-control__segments .appearance-mode-control--active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.14);
+}
+
+.appearance-mode-control__segments button:focus-visible {
+  outline: 2px solid rgba(143, 216, 255, 0.84);
+  outline-offset: 2px;
+}
+
 .toggle-control input {
   position: absolute;
   opacity: 0;
@@ -2961,5 +3185,10 @@ input {
   .save-check-icon polyline,
   .save-check-icon line {
     animation: none;
+  }
+
+  .island__glass::before,
+  .island__glass-highlight {
+    transition: none;
   }
 }

@@ -7,7 +7,10 @@ use std::{
     os::windows::process::CommandExt,
     path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex, OnceLock,
+    },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -15,9 +18,11 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle, LogicalSize, Manager, PhysicalPosition, Position, Size, WebviewWindow,
+    WindowEvent,
 };
 use windows::Win32::{
     Foundation::{POINT, RECT, RPC_E_CHANGED_MODE},
+    Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
     Media::Audio::Endpoints::IAudioMeterInformation,
     Media::Audio::{
         eCommunications, eConsole, eMultimedia, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -47,6 +52,8 @@ const EXPANDED_ISLAND_HEIGHT_RANGE: f64 = 240.0;
 const EXPANDED_RADIUS: f64 = 30.0;
 const STAGE_WINDOW_PADDING_Y: f64 = 24.0;
 const TUCKED_VISIBLE_EDGE_HEIGHT: f64 = 10.0;
+const GLASS_REGION_ANIMATION_MS: u64 = 180;
+const GLASS_REGION_FRAME_MS: u64 = 12;
 const STARTUP_REGISTRY_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const STARTUP_REGISTRY_VALUE: &str = "FocuSD Island";
 const AUDIO_ACTIVE_THRESHOLD: f32 = 0.000015;
@@ -66,6 +73,10 @@ const AGENT_RUNNING_SCRIPT: &str = include_str!("../../scripts/focusd-agent-runn
 const AGENT_STATUS_SCRIPT: &str = include_str!("../../scripts/focusd-agent-status.ps1");
 
 static WINDOW_STATE: OnceLock<Mutex<IslandWindowState>> = OnceLock::new();
+static GLASS_REGION_REVISION: AtomicU64 = AtomicU64::new(0);
+static LAST_GLASS_REGION: OnceLock<Mutex<Option<GlassRegion>>> = OnceLock::new();
+static SYSTEM_TRANSPARENCY_ENABLED: OnceLock<bool> = OnceLock::new();
+static GLASS_REGION_APPLY_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Copy)]
 enum IslandMode {
@@ -104,6 +115,18 @@ struct IslandWindowState {
     size_scale: f64,
     margin_y: f64,
     expanded_height: f64,
+    glass_enabled: bool,
+    glass_intensity: f64,
+    glass_tint: (u8, u8, u8),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct GlassRegion {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+    diameter: i32,
 }
 
 impl Default for IslandWindowState {
@@ -114,6 +137,9 @@ impl Default for IslandWindowState {
             size_scale: DEFAULT_SCALE,
             margin_y: DEFAULT_MARGIN_Y,
             expanded_height: DEFAULT_EXPANDED_ISLAND_HEIGHT,
+            glass_enabled: false,
+            glass_intensity: 72.0,
+            glass_tint: (16, 16, 19),
         }
     }
 }
@@ -227,9 +253,13 @@ fn set_island_interaction(
     margin_y: Option<f64>,
     expanded_height: Option<f64>,
     is_tucked: Option<bool>,
-) -> Result<(), String> {
+    glass_enabled: Option<bool>,
+    glass_intensity: Option<f64>,
+    glass_tint: Option<String>,
+) -> Result<String, String> {
     let window = main_window(&app)?;
     let mode = IslandMode::from_value(&mode)?;
+    let previous_state = read_window_state();
     let state = mutate_window_state(|state| {
         state.mode = mode;
         state.is_tucked = is_tucked.unwrap_or(false);
@@ -243,9 +273,17 @@ fn set_island_interaction(
                 DEFAULT_EXPANDED_ISLAND_HEIGHT + EXPANDED_ISLAND_HEIGHT_RANGE,
             );
         }
+        state.glass_enabled = glass_enabled.unwrap_or(false);
+        if let Some(glass_intensity) = glass_intensity {
+            state.glass_intensity = glass_intensity.clamp(25.0, 100.0);
+        }
+        if let Some(glass_tint) = glass_tint.as_deref().and_then(parse_hex_color) {
+            state.glass_tint = glass_tint;
+        }
         *state
     });
-    apply_stage_geometry(&window, state)
+    apply_stage_geometry(&window, state)?;
+    apply_glass_material(&window, previous_state, state)
 }
 
 #[tauri::command]
@@ -1135,6 +1173,200 @@ fn read_window_state() -> IslandWindowState {
     *window_state().lock().expect("window state poisoned")
 }
 
+fn last_glass_region() -> &'static Mutex<Option<GlassRegion>> {
+    LAST_GLASS_REGION.get_or_init(|| Mutex::new(None))
+}
+
+fn parse_hex_color(value: &str) -> Option<(u8, u8, u8)> {
+    let hex = value.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    Some((
+        u8::from_str_radix(&hex[0..2], 16).ok()?,
+        u8::from_str_radix(&hex[2..4], 16).ok()?,
+        u8::from_str_radix(&hex[4..6], 16).ok()?,
+    ))
+}
+
+fn calculate_glass_region(state: IslandWindowState, scale_factor: f64) -> GlassRegion {
+    let (base_width, base_height) = state.mode.base_size(state.expanded_height);
+    let stage_width = STAGE_WINDOW_WIDTH * scale_factor;
+    let width = base_width * state.size_scale * scale_factor;
+    let height = base_height * state.size_scale * scale_factor;
+    let radius = state.mode.corner_radius() * state.size_scale * scale_factor;
+    let left = ((stage_width - width) / 2.0).round() as i32;
+
+    GlassRegion {
+        left,
+        top: 0,
+        right: left + width.ceil() as i32 + 1,
+        bottom: height.ceil() as i32 + 1,
+        diameter: (radius * 2.0).round().max(1.0) as i32,
+    }
+}
+
+fn interpolate_glass_region(from: GlassRegion, to: GlassRegion, progress: f64) -> GlassRegion {
+    let ease = 1.0 - (1.0 - progress.clamp(0.0, 1.0)).powi(3);
+    let interpolate =
+        |start: i32, end: i32| (start as f64 + (end - start) as f64 * ease).round() as i32;
+
+    GlassRegion {
+        left: interpolate(from.left, to.left),
+        top: interpolate(from.top, to.top),
+        right: interpolate(from.right, to.right),
+        bottom: interpolate(from.bottom, to.bottom),
+        diameter: interpolate(from.diameter, to.diameter),
+    }
+}
+
+fn set_window_glass_region(window: &WebviewWindow, region: GlassRegion) -> Result<(), String> {
+    let hwnd = window.hwnd().map_err(|error| error.to_string())?;
+    let region_handle = unsafe {
+        CreateRoundRectRgn(
+            region.left,
+            region.top,
+            region.right,
+            region.bottom,
+            region.diameter,
+            region.diameter,
+        )
+    };
+
+    if region_handle.is_invalid() {
+        return Err("Failed to create the liquid glass window region.".to_string());
+    }
+
+    if unsafe { SetWindowRgn(hwnd, Some(region_handle), true) } == 0 {
+        let _ = unsafe { windows::Win32::Graphics::Gdi::DeleteObject(region_handle.into()) };
+        return Err("Failed to apply the liquid glass window region.".to_string());
+    }
+
+    *last_glass_region()
+        .lock()
+        .expect("glass region state poisoned") = Some(region);
+    Ok(())
+}
+
+fn clear_window_glass_region(window: &WebviewWindow) -> Result<(), String> {
+    GLASS_REGION_REVISION.fetch_add(1, Ordering::SeqCst);
+    let _apply_guard = GLASS_REGION_APPLY_LOCK
+        .lock()
+        .expect("glass region apply lock poisoned");
+    let hwnd = window.hwnd().map_err(|error| error.to_string())?;
+    if unsafe { SetWindowRgn(hwnd, None, true) } == 0 {
+        return Err("Failed to clear the liquid glass window region.".to_string());
+    }
+    *last_glass_region()
+        .lock()
+        .expect("glass region state poisoned") = None;
+    Ok(())
+}
+
+fn animate_window_glass_region(
+    window: &WebviewWindow,
+    from: Option<GlassRegion>,
+    to: GlassRegion,
+) -> Result<(), String> {
+    let Some(from) = from else {
+        GLASS_REGION_REVISION.fetch_add(1, Ordering::SeqCst);
+        let _apply_guard = GLASS_REGION_APPLY_LOCK
+            .lock()
+            .expect("glass region apply lock poisoned");
+        return set_window_glass_region(window, to);
+    };
+
+    if from == to {
+        return Ok(());
+    }
+
+    let revision = GLASS_REGION_REVISION.fetch_add(1, Ordering::SeqCst) + 1;
+    let window = window.clone();
+    thread::spawn(move || {
+        let frame_count = (GLASS_REGION_ANIMATION_MS / GLASS_REGION_FRAME_MS).max(1);
+        for frame in 1..=frame_count {
+            let progress = frame as f64 / frame_count as f64;
+            let region = interpolate_glass_region(from, to, progress);
+            {
+                let _apply_guard = GLASS_REGION_APPLY_LOCK
+                    .lock()
+                    .expect("glass region apply lock poisoned");
+                if GLASS_REGION_REVISION.load(Ordering::SeqCst) != revision {
+                    return;
+                }
+                if let Err(error) = set_window_glass_region(&window, region) {
+                    eprintln!("failed to animate liquid glass region: {error}");
+                    return;
+                }
+            }
+            thread::sleep(Duration::from_millis(GLASS_REGION_FRAME_MS));
+        }
+    });
+    Ok(())
+}
+
+fn system_transparency_enabled() -> bool {
+    *SYSTEM_TRANSPARENCY_ENABLED.get_or_init(|| {
+        let mut command = Command::new("reg");
+        command.creation_flags(CREATE_NO_WINDOW).args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "/v",
+            "EnableTransparency",
+        ]);
+
+        command
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| !String::from_utf8_lossy(&output.stdout).contains("0x0"))
+            .unwrap_or(true)
+    })
+}
+
+fn apply_glass_material(
+    window: &WebviewWindow,
+    previous_state: IslandWindowState,
+    state: IslandWindowState,
+) -> Result<String, String> {
+    if !state.glass_enabled {
+        let _ = window_vibrancy::clear_acrylic(window);
+        clear_window_glass_region(window)?;
+        return Ok("disabled".to_string());
+    }
+
+    if !system_transparency_enabled() {
+        let _ = window_vibrancy::clear_acrylic(window);
+        clear_window_glass_region(window)?;
+        return Ok("css-fallback".to_string());
+    }
+
+    let scale_factor = window.scale_factor().map_err(|error| error.to_string())?;
+    let target_region = calculate_glass_region(state, scale_factor);
+    let previous_region = if previous_state.glass_enabled {
+        *last_glass_region()
+            .lock()
+            .expect("glass region state poisoned")
+    } else {
+        None
+    };
+
+    animate_window_glass_region(window, previous_region, target_region)?;
+
+    let (red, green, blue) = state.glass_tint;
+    let alpha = (22.0 + state.glass_intensity * 0.34).round() as u8;
+    match window_vibrancy::apply_acrylic(window, Some((red, green, blue, alpha))) {
+        Ok(()) => Ok("active".to_string()),
+        Err(error) => {
+            let _ = window_vibrancy::clear_acrylic(window);
+            clear_window_glass_region(window)?;
+            eprintln!("native acrylic is unavailable: {error}");
+            Ok("css-fallback".to_string())
+        }
+    }
+}
+
 fn apply_stage_geometry(window: &WebviewWindow, state: IslandWindowState) -> Result<(), String> {
     let (_, base_height) = state.mode.base_size(state.expanded_height);
     let stage_height =
@@ -1268,6 +1500,93 @@ fn point_in_rounded_rect(
     (dx * dx) + (dy * dy) <= radius * radius
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(mode: IslandMode, scale: f64, expanded_height: f64) -> IslandWindowState {
+        IslandWindowState {
+            mode,
+            size_scale: scale,
+            expanded_height,
+            ..IslandWindowState::default()
+        }
+    }
+
+    #[test]
+    fn collapsed_region_is_centered_at_common_scale_factors() {
+        let region_125 = calculate_glass_region(
+            state(IslandMode::Collapsed, 1.0, DEFAULT_EXPANDED_ISLAND_HEIGHT),
+            1.25,
+        );
+        assert_eq!(region_125.left, 313);
+        assert_eq!(region_125.right, 714);
+        assert_eq!(region_125.bottom, 74);
+        assert_eq!(region_125.diameter, 73);
+
+        let region_150 = calculate_glass_region(
+            state(IslandMode::Collapsed, 1.0, DEFAULT_EXPANDED_ISLAND_HEIGHT),
+            1.5,
+        );
+        assert_eq!(region_150.left, 375);
+        assert_eq!(region_150.right, 856);
+        assert_eq!(region_150.bottom, 88);
+        assert_eq!(region_150.diameter, 87);
+    }
+
+    #[test]
+    fn expanded_region_uses_dynamic_height_and_scaled_radius() {
+        let region = calculate_glass_region(state(IslandMode::Expanded, 1.2, 430.0), 1.25);
+        assert_eq!(region.left, 93);
+        assert_eq!(region.right, 934);
+        assert_eq!(region.bottom, 646);
+        assert_eq!(region.diameter, 90);
+    }
+
+    #[test]
+    fn tucked_state_does_not_change_local_region_geometry() {
+        let normal = state(IslandMode::Collapsed, 1.0, DEFAULT_EXPANDED_ISLAND_HEIGHT);
+        let mut tucked = normal;
+        tucked.is_tucked = true;
+
+        assert_eq!(
+            calculate_glass_region(normal, 1.25),
+            calculate_glass_region(tucked, 1.25)
+        );
+    }
+
+    #[test]
+    fn region_interpolation_reaches_endpoints_and_eases_forward() {
+        let from = GlassRegion {
+            left: 250,
+            top: 0,
+            right: 570,
+            bottom: 58,
+            diameter: 58,
+        };
+        let to = GlassRegion {
+            left: 130,
+            top: 0,
+            right: 690,
+            bottom: 430,
+            diameter: 60,
+        };
+
+        assert_eq!(interpolate_glass_region(from, to, 0.0), from);
+        assert_eq!(interpolate_glass_region(from, to, 1.0), to);
+        let midpoint = interpolate_glass_region(from, to, 0.5);
+        assert!(midpoint.bottom > (from.bottom + to.bottom) / 2);
+        assert!(midpoint.left < (from.left + to.left) / 2);
+    }
+
+    #[test]
+    fn hex_tint_parser_rejects_invalid_values() {
+        assert_eq!(parse_hex_color("#101013"), Some((16, 16, 19)));
+        assert_eq!(parse_hex_color("101013"), None);
+        assert_eq!(parse_hex_color("#xyzxyz"), None);
+    }
+}
+
 fn build_tray(app: &App) -> tauri::Result<()> {
     let show_item = MenuItem::with_id(app, "show", "Show Island", true, None::<&str>)?;
     let hide_item = MenuItem::with_id(app, "hide", "Hide Island", true, None::<&str>)?;
@@ -1312,6 +1631,27 @@ pub fn run() {
             let _ = show_island(app);
         }))
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if !matches!(event, WindowEvent::ScaleFactorChanged { .. }) {
+                return;
+            }
+
+            let state = read_window_state();
+            if !state.glass_enabled {
+                return;
+            }
+
+            let Some(window) = window.app_handle().get_webview_window(window.label()) else {
+                return;
+            };
+            let Ok(scale_factor) = window.scale_factor() else {
+                return;
+            };
+            let region = calculate_glass_region(state, scale_factor);
+            if let Err(error) = animate_window_glass_region(&window, None, region) {
+                eprintln!("failed to update liquid glass region for DPI change: {error}");
+            }
+        })
         .setup(|app| {
             build_tray(app)?;
             if let Err(error) = clipboard_history::init(app.handle()) {

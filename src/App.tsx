@@ -142,8 +142,12 @@ type AgentHooksInstallResult = {
 };
 
 type AgentHooksInstallState = "idle" | "installing" | "installed" | "error";
+type AppearanceMode = "classic" | "liquidGlass";
+type NativeGlassState = "active" | "css-fallback" | "disabled";
 
 type IslandSettings = {
+  appearanceMode: AppearanceMode;
+  glassIntensity: number;
   opacity: number;
   sizeScale: number;
   marginY: number;
@@ -168,6 +172,8 @@ type IslandPreset = {
 type IslandShellProps = {
   mode: IslandMode;
   page: IslandPage;
+  appearanceMode: AppearanceMode;
+  nativeGlassState: NativeGlassState;
   isTucked: boolean;
   showTitle: boolean;
   activeTaskTitle: string | null;
@@ -240,6 +246,8 @@ const DEFAULT_CLIPBOARD_HISTORY: ClipboardHistorySnapshot = {
   items: [],
 };
 const DEFAULT_SETTINGS: IslandSettings = {
+  appearanceMode: "liquidGlass",
+  glassIntensity: 72,
   opacity: 95,
   sizeScale: 1,
   marginY: 31,
@@ -503,6 +511,16 @@ function normalizeSettings(
   );
 
   return {
+    appearanceMode:
+      settings?.appearanceMode === "classic" ||
+      settings?.appearanceMode === "liquidGlass"
+        ? settings.appearanceMode
+        : "classic",
+    glassIntensity: clamp(
+      Number(settings?.glassIntensity ?? DEFAULT_SETTINGS.glassIntensity),
+      25,
+      100,
+    ),
     opacity: clamp(Number(settings?.opacity ?? DEFAULT_SETTINGS.opacity), 50, 100),
     sizeScale: clamp(
       Number(settings?.sizeScale ?? DEFAULT_SETTINGS.sizeScale),
@@ -795,6 +813,8 @@ function createTodoId() {
 function IslandShell({
   mode,
   page,
+  appearanceMode,
+  nativeGlassState,
   isTucked,
   showTitle,
   activeTaskTitle,
@@ -810,7 +830,9 @@ function IslandShell({
   onPageChange,
   children,
 }: IslandShellProps) {
+  const glassFrameRef = useRef<number | null>(null);
   const isExpanded = mode === "expanded";
+  const isLiquidGlass = appearanceMode === "liquidGlass";
   const isMusicPlaying =
     mediaState.playbackStatus === "playing" ||
     (mediaState.playbackStatus !== "paused" && mediaState.audioActive);
@@ -818,6 +840,8 @@ function IslandShell({
     "island",
     `island--${mode}`,
     `island--${page}`,
+    `island--appearance-${appearanceMode}`,
+    isLiquidGlass ? `island--glass-${nativeGlassState}` : "",
     showTitle ? "" : "island--title-hidden",
   ]
     .filter(Boolean)
@@ -834,10 +858,62 @@ function IslandShell({
     ? `正在专注：${activeTaskTitle}`
     : "FocuSD Island";
 
+  useEffect(
+    () => () => {
+      if (glassFrameRef.current !== null) {
+        window.cancelAnimationFrame(glassFrameRef.current);
+      }
+    },
+    [],
+  );
+
+  const handleGlassPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (
+        !isLiquidGlass ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        glassFrameRef.current !== null
+      ) {
+        return;
+      }
+
+      const island = event.currentTarget;
+      const rect = island.getBoundingClientRect();
+      const pointerX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+      const pointerY = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+
+      glassFrameRef.current = window.requestAnimationFrame(() => {
+        glassFrameRef.current = null;
+        island.style.setProperty("--glass-pointer-x", `${pointerX * 100}%`);
+        island.style.setProperty("--glass-pointer-y", `${pointerY * 100}%`);
+      });
+    },
+    [isLiquidGlass],
+  );
+
+  const resetGlassPointer = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (!isLiquidGlass) {
+        return;
+      }
+
+      if (glassFrameRef.current !== null) {
+        window.cancelAnimationFrame(glassFrameRef.current);
+        glassFrameRef.current = null;
+      }
+
+      event.currentTarget.style.setProperty("--glass-pointer-x", "50%");
+      event.currentTarget.style.setProperty("--glass-pointer-y", "18%");
+    },
+    [isLiquidGlass],
+  );
+
   return (
     <section
       className={className}
       aria-label={collapsedLabel}
+      onPointerMove={handleGlassPointerMove}
+      onPointerLeave={resetGlassPointer}
       onClick={() => {
         if (!isExpanded) {
           onOpenPage(page);
@@ -849,6 +925,12 @@ function IslandShell({
         }
       }}
     >
+      {isLiquidGlass && (
+        <div className="island__glass" aria-hidden="true">
+          <span className="island__glass-refraction" />
+          <span className="island__glass-highlight" />
+        </div>
+      )}
       <div className="island__collapsed" aria-hidden={isExpanded}>
         <span className={pulseClassName} title={agentStatusLabel} />
         {showTitle && <span className="island__brand">FocuSD</span>}
@@ -1156,6 +1238,40 @@ function ToggleControl({
   );
 }
 
+function AppearanceModeControl({
+  value,
+  onChange,
+}: {
+  value: AppearanceMode;
+  onChange: (value: AppearanceMode) => void;
+}) {
+  return (
+    <div className="appearance-mode-control">
+      <span>外观模式</span>
+      <div className="appearance-mode-control__segments" role="group">
+        <button
+          className={value === "classic" ? "appearance-mode-control--active" : ""}
+          type="button"
+          aria-pressed={value === "classic"}
+          onClick={() => onChange("classic")}
+        >
+          经典
+        </button>
+        <button
+          className={
+            value === "liquidGlass" ? "appearance-mode-control--active" : ""
+          }
+          type="button"
+          aria-pressed={value === "liquidGlass"}
+          onClick={() => onChange("liquidGlass")}
+        >
+          液态玻璃
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function NumberControl({
   label,
   value,
@@ -1369,6 +1485,25 @@ function LayoutEditor({
         <div className="settings-section__header">
           <span>布局设置</span>
         </div>
+        <AppearanceModeControl
+          value={settings.appearanceMode}
+          onChange={(appearanceMode) =>
+            onSettingsChange({ ...settings, appearanceMode })
+          }
+        />
+        {settings.appearanceMode === "liquidGlass" && (
+          <SliderControl
+            label="玻璃强度"
+            value={settings.glassIntensity}
+            min={25}
+            max={100}
+            step={1}
+            suffix="%"
+            onChange={(glassIntensity) =>
+              onSettingsChange({ ...settings, glassIntensity })
+            }
+          />
+        )}
         <SliderControl
           label="不透明度"
           value={settings.opacity}
@@ -3036,6 +3171,8 @@ function App() {
   const isRefreshingAudioLevel = useRef(false);
   const mediaStatusLockUntil = useRef(0);
   const [settings, setSettings] = useState<IslandSettings>(loadSettings);
+  const [nativeGlassState, setNativeGlassState] =
+    useState<NativeGlassState>("disabled");
   const [launchAtStartup, setLaunchAtStartup] = useState(false);
   const [settingPresets, setSettingPresets] =
     useState<IslandPreset[]>(loadSettingPresets);
@@ -3117,8 +3254,12 @@ function App() {
   });
 
   const stageStyle = useMemo(
-    () =>
-      ({
+    () => {
+      const glassStrength = settings.glassIntensity / 100;
+      const glassMaskOpacity =
+        (settings.opacity / 100) * (0.34 + glassStrength * 0.3);
+
+      return ({
         "--island-opacity": settings.opacity / 100,
         "--island-scale": settings.sizeScale,
         "--expanded-island-height": `${expandedIslandHeight}px`,
@@ -3127,10 +3268,31 @@ function App() {
         "--island-pulse-glow-color": hexToRgba(settings.pulseColor, 0.72),
         "--island-pulse-brightness": `${settings.pulseBrightness}%`,
         "--island-background-color": settings.islandBackgroundColor,
+        "--glass-intensity": glassStrength,
+        "--glass-mask-opacity": glassMaskOpacity,
+        "--glass-soft-alpha": 0.055 + glassStrength * 0.055,
+        "--glass-shadow-alpha": 0.2 + glassStrength * 0.13,
+        "--glass-inset-alpha": 0.18 + glassStrength * 0.18,
+        "--glass-cyan-alpha": glassStrength * 0.16,
+        "--glass-magenta-alpha": glassStrength * 0.1,
+        "--glass-glow-alpha": 0.12 + glassStrength * 0.12,
+        "--glass-accent-alpha": glassStrength * 0.055,
+        "--glass-refraction-opacity": 0.45 + glassStrength * 0.38,
+        "--glass-border-alpha": 0.1 + glassStrength * 0.18,
+        "--glass-inner-accent-alpha": glassStrength * 0.08,
+        "--glass-highlight-opacity": 0.34 + glassStrength * 0.38,
+        "--glass-panel-accent-alpha": glassStrength * 0.11,
+        "--glass-panel-blur": `${8 + glassStrength * 8}px`,
+        "--glass-tint-color": hexToRgba(
+          settings.islandBackgroundColor,
+          glassMaskOpacity,
+        ),
         "--todo-background-color": settings.todoBackgroundColor,
-      }) as CSSProperties,
+      }) as CSSProperties;
+    },
     [
       expandedIslandHeight,
+      settings.glassIntensity,
       settings.islandBackgroundColor,
       settings.opacity,
       settings.pulseBrightness,
@@ -3203,15 +3365,27 @@ function App() {
       nextIsTucked: boolean,
     ) => {
       try {
-        await invoke("set_island_interaction", {
+        const glassState = await invoke<NativeGlassState>(
+          "set_island_interaction",
+          {
           mode: nextMode,
           sizeScale: nextSettings.sizeScale,
           marginY: nextSettings.marginY,
           expandedHeight: nextExpandedHeight,
           isTucked: nextIsTucked,
-        });
+            glassEnabled: nextSettings.appearanceMode === "liquidGlass",
+            glassIntensity: nextSettings.glassIntensity,
+            glassTint: nextSettings.islandBackgroundColor,
+          },
+        );
+        setNativeGlassState(glassState);
       } catch (error) {
         console.error("Failed to sync island interaction", error);
+        setNativeGlassState(
+          nextSettings.appearanceMode === "liquidGlass"
+            ? "css-fallback"
+            : "disabled",
+        );
       }
     },
     [],
@@ -4226,6 +4400,9 @@ function App() {
     isTucked,
     mode,
     settings.marginY,
+    settings.appearanceMode,
+    settings.glassIntensity,
+    settings.islandBackgroundColor,
     settings.sizeScale,
     showReadyIsland,
     syncNativeInteraction,
@@ -4300,6 +4477,8 @@ function App() {
       <IslandShell
         mode={mode}
         page={page}
+        appearanceMode={settings.appearanceMode}
+        nativeGlassState={nativeGlassState}
         isTucked={isTucked}
         showTitle={settings.showTitle}
         activeTaskTitle={activeTaskTitle}
