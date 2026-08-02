@@ -98,7 +98,7 @@ input {
 }
 
 .island--clipboard {
-  --glass-page-accent: 255, 209, 102;
+  --glass-page-accent: 182, 169, 211;
 }
 
 .island--layout {
@@ -726,18 +726,19 @@ input {
   gap: 18px;
   overflow: hidden;
   padding: 20px 24px 22px;
-  color: #f7fbf7;
+  color: rgba(244, 247, 248, 0.94);
   background:
-    radial-gradient(circle at 50% 18%, rgba(125, 232, 180, 0.16), transparent 32%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045)),
-    rgba(9, 13, 14, 0.82);
+    radial-gradient(ellipse at 18% 0%, rgba(255, 255, 255, 0.12), transparent 36%),
+    radial-gradient(ellipse at 88% 96%, rgba(172, 169, 196, 0.1), transparent 42%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.018)),
+    rgba(18, 21, 25, 0.88);
   box-shadow:
     0 16px 32px rgba(0, 0, 0, 0.24),
     inset 0 0 0 1px rgba(255, 255, 255, 0.09);
 }
 
 .music-player--empty {
-  color: rgba(247, 251, 247, 0.78);
+  color: rgba(244, 247, 248, 0.68);
 }
 
 .music-player__signal {
@@ -758,7 +759,7 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: rgba(247, 251, 247, 0.58);
+  color: rgba(232, 237, 239, 0.48);
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
@@ -766,7 +767,7 @@ input {
 }
 
 .music-player__status strong {
-  color: rgba(185, 255, 217, 0.94);
+  color: rgba(250, 252, 252, 0.9);
   font-size: 13px;
 }
 
@@ -786,9 +787,9 @@ input {
   flex: 0 0 auto;
   border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(116, 214, 255, 0.98), rgba(157, 246, 194, 0.98));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(198, 211, 217, 0.62));
   box-shadow:
-    0 0 18px rgba(125, 232, 180, 0.22),
+    0 0 16px rgba(222, 232, 235, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.32);
   opacity: var(--wave-opacity, 0.44);
   transform: scaleY(var(--wave-scale, 0.18));
@@ -811,7 +812,7 @@ input {
   bottom: 17px;
   left: 4%;
   height: 36px;
-  background: linear-gradient(90deg, transparent, rgba(116, 214, 255, 0.14) 22%, rgba(182, 156, 255, 0.12) 54%, rgba(157, 246, 194, 0.13) 78%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(116, 214, 255, 0.14) 22%, rgba(182, 156, 255, 0.12) 54%, rgba(190, 239, 255, 0.13) 78%, transparent);
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
   filter: blur(8px);
@@ -823,8 +824,8 @@ input {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.7), rgba(174, 231, 255, 0.15) 28%, rgba(182, 156, 255, 0.18) 64%, rgba(225, 255, 241, 0.52)),
-    linear-gradient(180deg, rgba(116, 214, 255, 0.18), rgba(157, 246, 194, 0.08));
+    linear-gradient(90deg, rgba(255, 255, 255, 0.7), rgba(174, 231, 255, 0.15) 28%, rgba(182, 156, 255, 0.18) 64%, rgba(205, 244, 255, 0.52)),
+    linear-gradient(180deg, rgba(116, 214, 255, 0.18), rgba(190, 239, 255, 0.08));
   border: 1px solid rgba(255, 255, 255, 0.34);
   box-shadow:
     inset 2px 0 2px rgba(255, 255, 255, 0.58),
@@ -875,9 +876,9 @@ input {
   display: inline-grid;
   place-items: center;
   padding: 0;
-  color: rgba(247, 251, 247, 0.82);
-  background: rgba(255, 255, 255, 0.09);
-  border: 0;
+  color: rgba(238, 243, 244, 0.76);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   outline: none;
   cursor: pointer;
@@ -891,26 +892,29 @@ input {
 
 .music-control-button:hover:not(:disabled) {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.12);
   transform: translateY(-1px);
 }
 
 .music-control-button:focus-visible {
-  outline: 2px solid rgba(174, 245, 208, 0.74);
+  outline: 2px solid rgba(232, 242, 248, 0.78);
   outline-offset: 3px;
 }
 
 .music-control-button--primary {
   width: 44px;
   height: 44px;
-  color: #04100a;
-  background: #9ff0c5;
-  box-shadow: 0 0 20px rgba(125, 232, 180, 0.24);
+  color: #20282c;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(210, 219, 222, 0.72));
+  border-color: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .music-control-button--primary:hover:not(:disabled) {
-  color: #04100a;
-  background: #b9ffd9;
+  color: #171d20;
+  background: linear-gradient(145deg, #ffffff, rgba(224, 231, 232, 0.9));
 }
 
 .music-control-button:disabled {
@@ -925,11 +929,11 @@ input {
   gap: 10px;
   overflow: hidden;
   padding: 16px 18px 18px;
-  color: #f8f4e9;
+  color: rgba(241, 240, 246, 0.92);
   background:
-    radial-gradient(circle at 88% 12%, rgba(255, 209, 102, 0.16), transparent 30%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.045)),
-    rgba(15, 14, 18, 0.88);
+    radial-gradient(circle at 88% 12%, rgba(182, 169, 211, 0.12), transparent 32%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.018)),
+    rgba(20, 20, 25, 0.88);
   background-size: auto;
   border-radius: 22px;
   box-shadow:
@@ -950,24 +954,24 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: rgba(248, 244, 233, 0.9);
+  color: rgba(243, 242, 247, 0.9);
   font-size: 13px;
   font-weight: 900;
   line-height: 1;
 }
 
 .clipboard-panel__title svg {
-  color: #ffd166;
+  color: rgba(226, 222, 241, 0.78);
 }
 
 .clipboard-panel__title strong {
-  min-width: 24px;
-  height: 20px;
+  min-width: 0;
+  height: auto;
   display: inline-grid;
   place-items: center;
-  padding: 0 7px;
-  color: #181410;
-  background: #ffd166;
+  padding: 0;
+  color: rgba(211, 205, 229, 0.68);
+  background: transparent;
   border: 0;
   border-radius: 999px;
   font-size: 11px;
@@ -975,14 +979,14 @@ input {
 }
 
 .clipboard-panel__title em {
-  height: 20px;
+  height: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 7px;
-  color: #ffd166;
-  background: rgba(255, 209, 102, 0.12);
-  border-radius: 999px;
+  padding: 0;
+  color: rgba(211, 205, 229, 0.68);
+  background: transparent;
+  border-radius: 0;
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
@@ -1017,9 +1021,9 @@ input {
   min-width: 86px;
   gap: 6px;
   padding: 0 9px;
-  color: rgba(248, 244, 233, 0.78);
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
+  color: rgba(225, 223, 233, 0.5);
+  background: transparent;
+  border-radius: 0;
   box-shadow: none;
   cursor: default;
   user-select: none;
@@ -1030,11 +1034,13 @@ input {
 }
 
 .clipboard-clear-button {
-  min-width: 50px;
-  padding: 0 11px;
-  color: #181410;
-  background: #ffd166;
-  border-radius: 999px;
+  min-width: 28px;
+  width: 28px;
+  padding: 0;
+  color: rgba(229, 226, 238, 0.62);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
   box-shadow: none;
   cursor: pointer;
 }
@@ -1049,8 +1055,8 @@ input {
 }
 
 .clipboard-clear-button:hover:not(:disabled) {
-  color: #181410;
-  background: #ffe09b;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.11);
 }
 
 .clipboard-clear-button--confirming:hover:not(:disabled) {
@@ -1065,24 +1071,26 @@ input {
 }
 
 .clipboard-segments {
-  min-height: 30px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  padding: 3px;
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 999px;
+  min-height: 28px;
+  display: flex;
+  gap: 18px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 0;
 }
 
 .clipboard-segments button {
+  position: relative;
   min-width: 0;
-  height: 24px;
-  padding: 0 10px;
-  color: rgba(248, 244, 233, 0.62);
+  width: auto;
+  height: 28px;
+  padding: 0 1px;
+  color: rgba(228, 226, 236, 0.48);
   background: transparent;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   outline: none;
   cursor: pointer;
   font-size: 12px;
@@ -1091,8 +1099,20 @@ input {
 
 .clipboard-segments button:hover,
 .clipboard-segments .clipboard-segment--active {
-  color: #181410;
-  background: #ffd166;
+  color: rgba(248, 247, 251, 0.94);
+  background: transparent;
+}
+
+.clipboard-segments .clipboard-segment--active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: rgba(204, 195, 228, 0.82);
+  border-radius: 999px;
+  box-shadow: 0 0 8px rgba(182, 169, 211, 0.2);
 }
 
 .clipboard-search {
@@ -1102,23 +1122,23 @@ input {
   align-items: center;
   gap: 8px;
   padding: 0 9px;
-  color: rgba(248, 244, 233, 0.58);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9px;
-  box-shadow: none;
+  color: rgba(225, 223, 233, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .clipboard-search:focus-within {
-  border-color: rgba(255, 209, 102, 0.55);
-  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.13);
+  border-color: rgba(204, 195, 228, 0.38);
+  box-shadow: 0 0 0 3px rgba(182, 169, 211, 0.08);
 }
 
 .clipboard-search input {
   min-width: 0;
   width: 100%;
   padding: 0;
-  color: #f8f4e9;
+  color: rgba(247, 246, 250, 0.9);
   background: transparent;
   border: 0;
   outline: none;
@@ -1127,7 +1147,7 @@ input {
 }
 
 .clipboard-search input::placeholder {
-  color: rgba(248, 244, 233, 0.38);
+  color: rgba(225, 223, 233, 0.32);
 }
 
 .clipboard-search button {
@@ -1156,7 +1176,7 @@ input {
   gap: 8px;
   overflow-y: auto;
   padding-right: 4px;
-  scrollbar-color: rgba(255, 209, 102, 0.38) rgba(255, 255, 255, 0.08);
+  scrollbar-color: rgba(204, 195, 228, 0.28) transparent;
   scrollbar-width: thin;
 }
 
@@ -1165,12 +1185,12 @@ input {
 }
 
 .clipboard-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.07);
+  background: transparent;
   border-radius: 999px;
 }
 
 .clipboard-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 209, 102, 0.42);
+  background: rgba(204, 195, 228, 0.28);
   border-radius: 999px;
 }
 
@@ -1178,7 +1198,7 @@ input {
   min-height: 118px;
   display: grid;
   place-items: center;
-  color: rgba(248, 244, 233, 0.5);
+  color: rgba(225, 223, 233, 0.42);
   background: transparent;
   border: 1px dashed rgba(255, 255, 255, 0.14);
   border-radius: 10px;
@@ -1192,11 +1212,19 @@ input {
   grid-template-columns: minmax(0, 1fr) minmax(88px, 132px) auto;
   align-items: center;
   gap: 8px;
-  padding: 7px;
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  box-shadow: none;
+  padding: 7px 8px;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.052), rgba(210, 205, 228, 0.018));
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.clipboard-item:hover {
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.082), rgba(182, 169, 211, 0.035));
+  border-color: rgba(222, 218, 238, 0.15);
 }
 
 .clipboard-item__main {
@@ -1221,7 +1249,7 @@ input {
 .clipboard-clear-button:focus-visible,
 .clipboard-segments button:focus-visible,
 .clipboard-search button:focus-visible {
-  outline: 2px solid rgba(255, 209, 102, 0.76);
+  outline: 2px solid rgba(210, 202, 232, 0.76);
   outline-offset: 2px;
 }
 
@@ -1232,14 +1260,14 @@ input {
   display: inline-grid;
   place-items: center;
   overflow: hidden;
-  color: #181410;
-  background: #ffd166;
-  border: 0;
-  border-radius: 8px;
+  color: rgba(233, 231, 242, 0.76);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(182, 169, 211, 0.035));
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 7px;
 }
 
 .clipboard-item__thumb {
-  background: #ffd166;
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .clipboard-item__thumb img {
@@ -1260,7 +1288,7 @@ input {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  color: rgba(248, 244, 233, 0.86);
+  color: rgba(242, 241, 247, 0.82);
   font-size: 13px;
   font-weight: 800;
   line-height: 1.32;
@@ -1317,7 +1345,7 @@ input {
 
 .island--appearance-liquidGlass .music-player::after {
   top: 54%;
-  background: linear-gradient(90deg, transparent, rgba(157, 246, 194, 0.06) 30%, rgba(116, 214, 255, 0.08) 62%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(190, 239, 255, 0.08) 30%, rgba(116, 214, 255, 0.08) 62%, transparent);
   border-bottom: 1px solid rgba(190, 239, 255, 0.1);
   border-radius: 50%;
   filter: blur(10px);
@@ -1347,7 +1375,7 @@ input {
   align-items: center;
   gap: 5px;
   padding: 0 8px;
-  color: rgba(248, 244, 233, 0.48);
+  color: rgba(225, 223, 233, 0.42);
   background: transparent;
   border: 1px dashed rgba(255, 255, 255, 0.16);
   border-radius: 7px;
@@ -1365,9 +1393,9 @@ input {
 }
 
 .clipboard-note--filled {
-  color: #f8e7a8;
-  background: rgba(255, 209, 102, 0.1);
-  border-color: rgba(255, 209, 102, 0.34);
+  color: rgba(218, 211, 238, 0.72);
+  background: rgba(182, 169, 211, 0.075);
+  border-color: rgba(204, 195, 228, 0.2);
   border-style: solid;
 }
 
@@ -1389,9 +1417,9 @@ input {
   min-width: 0;
   height: 28px;
   padding: 0 7px;
-  color: #fff8e6;
-  background: rgba(18, 16, 13, 0.52);
-  border: 1px solid rgba(255, 209, 102, 0.48);
+  color: rgba(247, 246, 250, 0.9);
+  background: rgba(6, 7, 10, 0.32);
+  border: 1px solid rgba(204, 195, 228, 0.28);
   border-radius: 7px;
   outline: none;
   font: inherit;
@@ -1414,8 +1442,8 @@ input {
 }
 
 .clipboard-note-editor button[type="submit"] {
-  color: #181410;
-  background: #ffd166;
+  color: rgba(246, 245, 250, 0.9);
+  background: rgba(182, 169, 211, 0.18);
 }
 
 .clipboard-note-editor button:disabled,
@@ -1451,15 +1479,15 @@ input {
 }
 
 .clipboard-favorite-button--active {
-  color: #181410 !important;
-  background: #ffd166 !important;
+  color: rgba(226, 218, 246, 0.94) !important;
+  background: rgba(182, 169, 211, 0.14) !important;
 }
 
 .clipboard-copy-button--copied {
   color: #ffffff !important;
-  background: #2f8c61 !important;
+  background: rgba(182, 169, 211, 0.26) !important;
   animation: saveButtonPop 760ms ease both;
-  box-shadow: 0 0 0 4px rgba(152, 212, 187, 0.22);
+  box-shadow: 0 0 0 3px rgba(182, 169, 211, 0.11);
 }
 
 .clipboard-delete-button--confirming {

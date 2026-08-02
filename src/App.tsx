@@ -2946,7 +2946,7 @@ function ClipboardHistoryPanel({
             {isConfirmingClear ? (
               <Check className="save-check-icon" size={14} strokeWidth={2.7} />
             ) : (
-              "清空"
+              <Trash2 size={14} strokeWidth={2.2} />
             )}
           </button>
         </div>
