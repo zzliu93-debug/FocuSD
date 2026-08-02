@@ -2578,7 +2578,7 @@ function MusicLevelWave({
     : 0;
   const bars = [0.22, 0.48, 0.78, 0.54, 0.92, 0.68, 0.4, 0.72, 0.34].map(
     (bar, index) => {
-      const floor = isAvailable ? 0.2 : 0.1;
+      const floor = isAvailable ? 0.2 : 0.14 + bar * 0.2;
       const breath =
         isAvailable && !prefersReducedMotion
           ? 0.06 + Math.sin(phase + index * 0.72) * 0.045
@@ -2588,7 +2588,7 @@ function MusicLevelWave({
         (0.34 + bar * 1.06) *
         (0.78 + Math.sin(phase * (1.05 + index * 0.05) + index * 1.35) * 0.28);
 
-      return clamp(floor + breath + movement, 0.1, 1.08);
+      return clamp(floor + breath + movement, 0.14, 1.08);
     },
   );
 
@@ -2600,7 +2600,7 @@ function MusicLevelWave({
           style={
             {
               "--wave-scale": scale.toFixed(3),
-              "--wave-opacity": (0.3 + scale * 0.68).toFixed(3),
+              "--wave-opacity": (0.46 + scale * 0.46).toFixed(3),
             } as CSSProperties
           }
         />
@@ -3257,7 +3257,7 @@ function App() {
     () => {
       const glassStrength = settings.glassIntensity / 100;
       const glassMaskOpacity =
-        (settings.opacity / 100) * (0.34 + glassStrength * 0.3);
+        (settings.opacity / 100) * (0.16 + glassStrength * 0.18);
 
       return ({
         "--island-opacity": settings.opacity / 100,
@@ -3270,19 +3270,19 @@ function App() {
         "--island-background-color": settings.islandBackgroundColor,
         "--glass-intensity": glassStrength,
         "--glass-mask-opacity": glassMaskOpacity,
-        "--glass-soft-alpha": 0.055 + glassStrength * 0.055,
-        "--glass-shadow-alpha": 0.2 + glassStrength * 0.13,
-        "--glass-inset-alpha": 0.18 + glassStrength * 0.18,
+        "--glass-soft-alpha": 0.045 + glassStrength * 0.045,
+        "--glass-shadow-alpha": 0.14 + glassStrength * 0.1,
+        "--glass-inset-alpha": 0.2 + glassStrength * 0.2,
         "--glass-cyan-alpha": glassStrength * 0.16,
         "--glass-magenta-alpha": glassStrength * 0.1,
-        "--glass-glow-alpha": 0.12 + glassStrength * 0.12,
+        "--glass-glow-alpha": 0.16 + glassStrength * 0.14,
         "--glass-accent-alpha": glassStrength * 0.055,
         "--glass-refraction-opacity": 0.45 + glassStrength * 0.38,
         "--glass-border-alpha": 0.1 + glassStrength * 0.18,
         "--glass-inner-accent-alpha": glassStrength * 0.08,
         "--glass-highlight-opacity": 0.34 + glassStrength * 0.38,
-        "--glass-panel-accent-alpha": glassStrength * 0.11,
-        "--glass-panel-blur": `${8 + glassStrength * 8}px`,
+        "--glass-panel-accent-alpha": glassStrength * 0.085,
+        "--glass-panel-blur": `${10 + glassStrength * 9}px`,
         "--glass-tint-color": hexToRgba(
           settings.islandBackgroundColor,
           glassMaskOpacity,

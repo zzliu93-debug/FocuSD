@@ -52,8 +52,8 @@ const EXPANDED_ISLAND_HEIGHT_RANGE: f64 = 240.0;
 const EXPANDED_RADIUS: f64 = 30.0;
 const STAGE_WINDOW_PADDING_Y: f64 = 24.0;
 const TUCKED_VISIBLE_EDGE_HEIGHT: f64 = 10.0;
-const GLASS_REGION_ANIMATION_MS: u64 = 180;
-const GLASS_REGION_FRAME_MS: u64 = 12;
+const GLASS_REGION_ANIMATION_MS: u64 = 340;
+const GLASS_REGION_FRAME_MS: u64 = 8;
 const STARTUP_REGISTRY_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const STARTUP_REGISTRY_VALUE: &str = "FocuSD Island";
 const AUDIO_ACTIVE_THRESHOLD: f32 = 0.000015;
@@ -1208,7 +1208,8 @@ fn calculate_glass_region(state: IslandWindowState, scale_factor: f64) -> GlassR
 }
 
 fn interpolate_glass_region(from: GlassRegion, to: GlassRegion, progress: f64) -> GlassRegion {
-    let ease = 1.0 - (1.0 - progress.clamp(0.0, 1.0)).powi(3);
+    let progress = progress.clamp(0.0, 1.0);
+    let ease = 1.0 - (1.0 - progress).powf(4.2);
     let interpolate =
         |start: i32, end: i32| (start as f64 + (end - start) as f64 * ease).round() as i32;
 
@@ -1445,6 +1446,24 @@ fn cursor_is_inside_island(window: &WebviewWindow) -> bool {
     let local_x = (cursor.x - window_rect.left) as f64;
     let local_y = (cursor.y - window_rect.top) as f64;
     let state = read_window_state();
+
+    if state.glass_enabled {
+        if let Some(region) = *last_glass_region()
+            .lock()
+            .expect("glass region state poisoned")
+        {
+            return point_in_rounded_rect(
+                local_x,
+                local_y,
+                region.left as f64,
+                region.top as f64,
+                (region.right - region.left) as f64,
+                (region.bottom - region.top) as f64,
+                region.diameter as f64 / 2.0,
+            );
+        }
+    }
+
     let (base_width, base_height) = state.mode.base_size(state.expanded_height);
     let island_width = base_width * state.size_scale * physical_scale;
     let island_height = base_height * state.size_scale * physical_scale;
@@ -1553,6 +1572,36 @@ mod tests {
             calculate_glass_region(normal, 1.25),
             calculate_glass_region(tucked, 1.25)
         );
+    }
+
+    #[test]
+    fn animated_region_hit_test_matches_the_visible_rounded_shape() {
+        let region = GlassRegion {
+            left: 250,
+            top: 0,
+            right: 570,
+            bottom: 58,
+            diameter: 58,
+        };
+
+        assert!(point_in_rounded_rect(
+            410.0,
+            29.0,
+            region.left as f64,
+            region.top as f64,
+            (region.right - region.left) as f64,
+            (region.bottom - region.top) as f64,
+            region.diameter as f64 / 2.0,
+        ));
+        assert!(!point_in_rounded_rect(
+            251.0,
+            1.0,
+            region.left as f64,
+            region.top as f64,
+            (region.right - region.left) as f64,
+            (region.bottom - region.top) as f64,
+            region.diameter as f64 / 2.0,
+        ));
     }
 
     #[test]

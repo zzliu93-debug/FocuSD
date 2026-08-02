@@ -86,10 +86,11 @@ input {
   transform-origin: top center;
   will-change: width, height, border-radius, transform;
   transition:
-    width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-radius 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background 160ms ease;
+    width 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 260ms ease,
+    box-shadow 300ms ease;
 }
 
 .island--music {
@@ -119,14 +120,14 @@ input {
     ),
     linear-gradient(
       165deg,
-      transparent 38%,
-      rgba(0, 0, 0, calc(0.13 + var(--glass-intensity) * 0.11))
+      transparent 42%,
+      rgba(2, 8, 14, 0.08)
     ),
     var(--glass-tint-color);
   box-shadow:
     0 18px 46px rgba(0, 0, 0, var(--glass-shadow-alpha)),
     inset 0 1px 0 rgba(255, 255, 255, var(--glass-inset-alpha)),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    inset 0 -1px 0 rgba(8, 18, 28, 0.16),
     inset 1px 0 0 rgba(130, 224, 255, var(--glass-cyan-alpha)),
     inset -1px 0 0 rgba(255, 158, 230, var(--glass-magenta-alpha));
 }
@@ -134,7 +135,7 @@ input {
 .island--appearance-liquidGlass.island--glass-css-fallback {
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 42%),
-    linear-gradient(165deg, transparent 34%, rgba(0, 0, 0, 0.32)),
+    linear-gradient(165deg, transparent 40%, rgba(4, 12, 20, 0.2)),
     var(--glass-tint-color);
 }
 
@@ -182,7 +183,7 @@ input {
   border-radius: inherit;
   background:
     linear-gradient(112deg, rgba(116, 214, 255, 0.1), transparent 16% 82%, rgba(255, 156, 224, 0.08)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 20% 78%, rgba(0, 0, 0, 0.16));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.13), transparent 22% 82%, rgba(20, 40, 52, 0.08));
   mix-blend-mode: screen;
   opacity: var(--glass-refraction-opacity);
 }
@@ -227,14 +228,54 @@ input {
 .island--appearance-liquidGlass.island--collapsed {
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.11), transparent 42%),
-    linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.24)),
+    linear-gradient(180deg, transparent 48%, rgba(6, 16, 24, 0.1)),
     var(--glass-tint-color);
   box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.27),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 12px 34px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    inset 0 -1px 0 rgba(8, 22, 32, 0.18),
     inset 1px 0 0 rgba(116, 214, 255, 0.14),
     inset -1px 0 0 rgba(255, 156, 224, 0.08);
+}
+
+.island--appearance-liquidGlass.island--expanded .island__glass::after {
+  animation: glassBloomExpand 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.island--appearance-liquidGlass.island--collapsed .island__glass::after {
+  animation: glassBloomCollapse 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes glassBloomExpand {
+  0% {
+    opacity: 0.28;
+    transform: scale(0.7, 0.28);
+    transform-origin: top center;
+  }
+  48% {
+    opacity: 1;
+    transform: scale(1.015, 1.02);
+  }
+  100% {
+    opacity: var(--glass-refraction-opacity);
+    transform: none;
+  }
+}
+
+@keyframes glassBloomCollapse {
+  0% {
+    opacity: var(--glass-refraction-opacity);
+    transform: none;
+  }
+  52% {
+    opacity: 0.9;
+    transform: scale(1.02, 0.76);
+    transform-origin: top center;
+  }
+  100% {
+    opacity: var(--glass-refraction-opacity);
+    transform: none;
+  }
 }
 
 .island--expanded {
@@ -250,8 +291,9 @@ input {
   inset: 0;
   z-index: 2;
   transition:
-    opacity 130ms ease,
-    transform 180ms ease;
+    opacity 180ms ease,
+    transform 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 300ms ease;
 }
 
 .island__collapsed {
@@ -266,7 +308,8 @@ input {
 .island--expanded .island__collapsed {
   pointer-events: none;
   opacity: 0;
-  transform: scale(0.98);
+  filter: blur(4px);
+  transform: scale(0.9, 0.72);
 }
 
 .island__pulse {
@@ -429,6 +472,33 @@ input {
     transform 90ms linear;
 }
 
+.island--appearance-liquidGlass .music-wave-button {
+  color: rgba(225, 251, 255, 0.9);
+  filter: drop-shadow(0 0 9px rgba(116, 214, 255, 0.22));
+}
+
+.island--appearance-liquidGlass .music-wave-button span {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.68), rgba(190, 239, 255, 0.2) 34%, rgba(182, 156, 255, 0.2) 72%, rgba(255, 255, 255, 0.54)),
+    rgba(206, 243, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow:
+    inset 1px 0 1px rgba(255, 255, 255, 0.7),
+    inset -1px 0 1px rgba(116, 214, 255, 0.2),
+    0 0 8px rgba(116, 214, 255, 0.18);
+  backdrop-filter: blur(5px) saturate(1.35);
+  -webkit-backdrop-filter: blur(5px) saturate(1.35);
+}
+
+.island--appearance-liquidGlass .music-wave-button--idle span {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.42), rgba(190, 239, 255, 0.1), rgba(255, 255, 255, 0.3)),
+    rgba(210, 240, 248, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .music-wave-button:hover {
   color: #c7ffdf;
 }
@@ -453,12 +523,15 @@ input {
   padding: 18px 20px 20px;
   pointer-events: none;
   opacity: 0;
-  transform: scale(0.98);
+  filter: blur(6px);
+  transform: scale(0.78, 0.42);
+  transform-origin: top center;
 }
 
 .island--expanded .island__expanded {
   pointer-events: auto;
   opacity: 1;
+  filter: none;
   transform: none;
   transition-delay: 0ms;
 }
@@ -646,6 +719,7 @@ input {
 }
 
 .music-player {
+  position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   align-items: center;
@@ -667,6 +741,8 @@ input {
 }
 
 .music-player__signal {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   align-self: stretch;
   display: flex;
@@ -722,12 +798,71 @@ input {
     transform 80ms linear;
 }
 
+.island--appearance-liquidGlass .music-player__wave {
+  position: relative;
+  isolation: isolate;
+}
+
+.island--appearance-liquidGlass .music-player__wave::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  right: 4%;
+  bottom: 17px;
+  left: 4%;
+  height: 36px;
+  background: linear-gradient(90deg, transparent, rgba(116, 214, 255, 0.14) 22%, rgba(182, 156, 255, 0.12) 54%, rgba(157, 246, 194, 0.13) 78%, transparent);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  filter: blur(8px);
+  opacity: 0.78;
+  transform: skewX(-14deg) rotate(-2deg);
+}
+
+.island--appearance-liquidGlass .music-player__wave span {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.7), rgba(174, 231, 255, 0.15) 28%, rgba(182, 156, 255, 0.18) 64%, rgba(225, 255, 241, 0.52)),
+    linear-gradient(180deg, rgba(116, 214, 255, 0.18), rgba(157, 246, 194, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow:
+    inset 2px 0 2px rgba(255, 255, 255, 0.58),
+    inset -2px 0 3px rgba(116, 214, 255, 0.18),
+    inset 0 -6px 10px rgba(182, 156, 255, 0.08),
+    0 0 16px rgba(116, 214, 255, 0.14);
+  backdrop-filter: blur(8px) saturate(1.4);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+}
+
+.island--appearance-liquidGlass .music-player__wave span::after {
+  content: "";
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  left: 2px;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.82), transparent);
+  border-radius: 999px;
+  opacity: 0.8;
+}
+
 .music-player--empty .music-player__wave span {
   background: rgba(247, 251, 247, 0.28);
   box-shadow: none;
 }
 
+.island--appearance-liquidGlass .music-player--empty .music-player__wave span {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.38), rgba(174, 231, 255, 0.08), rgba(255, 255, 255, 0.26)),
+    rgba(200, 236, 246, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 1px 0 1px rgba(255, 255, 255, 0.4);
+}
+
 .music-player__controls {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1150,6 +1285,43 @@ input {
     inset 0 -1px 0 rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(var(--glass-panel-blur)) saturate(1.12);
   -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(1.12);
+}
+
+.island--appearance-liquidGlass .music-player {
+  background:
+    radial-gradient(ellipse at 24% 72%, rgba(116, 214, 255, 0.1), transparent 42%),
+    radial-gradient(ellipse at 76% 24%, rgba(182, 156, 255, 0.09), transparent 44%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(222, 243, 255, 0.025)),
+    rgba(12, 21, 29, 0.16);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.island--appearance-liquidGlass .music-player::before,
+.island--appearance-liquidGlass .music-player::after {
+  content: "";
+  position: absolute;
+  right: -8%;
+  left: -8%;
+  height: 68px;
+  pointer-events: none;
+}
+
+.island--appearance-liquidGlass .music-player::before {
+  top: 38%;
+  background: linear-gradient(90deg, transparent, rgba(116, 214, 255, 0.08) 26%, rgba(255, 255, 255, 0.1) 52%, rgba(182, 156, 255, 0.08) 74%, transparent);
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 50%;
+  filter: blur(6px);
+  transform: rotate(-5deg) skewX(-18deg);
+}
+
+.island--appearance-liquidGlass .music-player::after {
+  top: 54%;
+  background: linear-gradient(90deg, transparent, rgba(157, 246, 194, 0.06) 30%, rgba(116, 214, 255, 0.08) 62%, transparent);
+  border-bottom: 1px solid rgba(190, 239, 255, 0.1);
+  border-radius: 50%;
+  filter: blur(10px);
+  transform: rotate(4deg) skewX(14deg);
 }
 
 .island--appearance-liquidGlass.island--glass-css-fallback .music-player,
@@ -3188,7 +3360,9 @@ input {
   }
 
   .island__glass::before,
+  .island__glass::after,
   .island__glass-highlight {
+    animation: none;
     transition: none;
   }
 }
