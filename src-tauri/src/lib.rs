@@ -1,4 +1,5 @@
 mod clipboard_history;
+mod media_control;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -21,22 +22,9 @@ use tauri::{
     WindowEvent,
 };
 use windows::Win32::{
-    Foundation::{POINT, RECT, RPC_E_CHANGED_MODE},
+    Foundation::{POINT, RECT},
     Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
-    Media::Audio::Endpoints::IAudioMeterInformation,
-    Media::Audio::{
-        eCommunications, eConsole, eMultimedia, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
-    },
-    System::Com::{
-        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
-    },
-    UI::{
-        Input::KeyboardAndMouse::{
-            keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_MEDIA_NEXT_TRACK,
-            VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
-        },
-        WindowsAndMessaging::{GetCursorPos, GetWindowRect},
-    },
+    UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect},
 };
 
 const WINDOW_LABEL: &str = "main";
@@ -56,7 +44,6 @@ const GLASS_REGION_ANIMATION_MS: u64 = 340;
 const GLASS_REGION_FRAME_MS: u64 = 8;
 const STARTUP_REGISTRY_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const STARTUP_REGISTRY_VALUE: &str = "FocuSD Island";
-const AUDIO_ACTIVE_THRESHOLD: f32 = 0.000015;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const AGENT_STATUS_FILE_NAME: &str = "agent-status.json";
 const CODEX_RUNNING_MARKER_FILE_NAME: &str = "agent-codex-running.flag";
@@ -155,28 +142,6 @@ struct IslandLayout {
 #[serde(rename_all = "camelCase")]
 struct SaveTodoMarkdownResult {
     file_path: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MediaState {
-    available: bool,
-    audio_active: bool,
-    audio_peak: f32,
-    playback_status: String,
-    updated_at: i64,
-}
-
-impl Default for MediaState {
-    fn default() -> Self {
-        Self {
-            available: false,
-            audio_active: false,
-            audio_peak: 0.0,
-            playback_status: "unavailable".to_string(),
-            updated_at: current_unix_millis(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -511,52 +476,40 @@ fn install_agent_status_hooks(app: AppHandle) -> Result<AgentHooksInstallResult,
 }
 
 #[tauri::command]
-fn get_media_state() -> MediaState {
-    read_media_state()
+async fn get_media_state() -> Result<media_control::MediaState, String> {
+    tauri::async_runtime::spawn_blocking(media_control::get_state)
+        .await
+        .map_err(|error| format!("Failed to join the media state task: {error}"))?
 }
 
 #[tauri::command]
-fn get_audio_level() -> AudioLevel {
-    let peak = read_system_audio_peak_window(1, Duration::ZERO).unwrap_or(0.0);
-
-    AudioLevel {
-        active: peak > AUDIO_ACTIVE_THRESHOLD,
-        peak,
-        updated_at: current_unix_millis(),
-    }
+async fn get_audio_level() -> Result<media_control::AudioLevel, String> {
+    tauri::async_runtime::spawn_blocking(media_control::get_audio_level)
+        .await
+        .map_err(|error| format!("Failed to join the audio level task: {error}"))?
 }
 
 #[tauri::command]
-fn media_play_pause() {
-    send_media_key(VK_MEDIA_PLAY_PAUSE);
+async fn media_play_pause() -> Result<media_control::MediaState, String> {
+    run_media_command(media_control::MediaCommand::PlayPause).await
 }
 
 #[tauri::command]
-fn media_next() {
-    send_media_key(VK_MEDIA_NEXT_TRACK);
+async fn media_next() -> Result<media_control::MediaState, String> {
+    run_media_command(media_control::MediaCommand::Next).await
 }
 
 #[tauri::command]
-fn media_previous() {
-    send_media_key(VK_MEDIA_PREV_TRACK);
+async fn media_previous() -> Result<media_control::MediaState, String> {
+    run_media_command(media_control::MediaCommand::Previous).await
 }
 
-fn read_media_state() -> MediaState {
-    let audio_peak = read_system_audio_peak_window(3, Duration::from_millis(6)).unwrap_or(0.0);
-    let audio_active = audio_peak > AUDIO_ACTIVE_THRESHOLD;
-
-    MediaState {
-        available: audio_active,
-        audio_active,
-        audio_peak,
-        playback_status: if audio_active {
-            "playing"
-        } else {
-            "unavailable"
-        }
-        .to_string(),
-        updated_at: current_unix_millis(),
-    }
+async fn run_media_command(
+    command: media_control::MediaCommand,
+) -> Result<media_control::MediaState, String> {
+    tauri::async_runtime::spawn_blocking(move || media_control::run_command(command))
+        .await
+        .map_err(|error| format!("Failed to join the media command task: {error}"))?
 }
 
 fn default_agent_status_snapshot(status_path: String) -> AgentStatusSnapshot {
@@ -1046,81 +999,6 @@ fn windows_home_dir() -> Result<PathBuf, String> {
     }
 }
 
-fn read_system_audio_peak_window(samples: usize, delay: Duration) -> Result<f32, String> {
-    unsafe {
-        let did_initialize_com = initialize_com_for_audio();
-        let peak_result = (|| {
-            let enumerator: IMMDeviceEnumerator =
-                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(media_error)?;
-            let mut meters: Vec<IAudioMeterInformation> = Vec::new();
-
-            for role in [eMultimedia, eConsole, eCommunications] {
-                if let Ok(device) = enumerator.GetDefaultAudioEndpoint(eRender, role) {
-                    if let Ok(meter) = device.Activate(CLSCTX_ALL, None) {
-                        meters.push(meter);
-                    }
-                }
-            }
-
-            if meters.is_empty() {
-                return Err("No default render audio endpoint was available.".to_string());
-            }
-
-            let mut peak = 0.0_f32;
-
-            for sample_index in 0..samples.max(1) {
-                for meter in &meters {
-                    if let Ok(value) = meter.GetPeakValue() {
-                        peak = peak.max(value);
-                    }
-                }
-
-                if !delay.is_zero() && sample_index + 1 < samples {
-                    thread::sleep(delay);
-                }
-            }
-
-            Ok(peak.clamp(0.0, 1.0))
-        })();
-
-        if did_initialize_com {
-            CoUninitialize();
-        }
-
-        peak_result
-    }
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AudioLevel {
-    active: bool,
-    peak: f32,
-    updated_at: i64,
-}
-
-fn initialize_com_for_audio() -> bool {
-    unsafe {
-        let result = CoInitializeEx(None, COINIT_MULTITHREADED);
-
-        if result == RPC_E_CHANGED_MODE {
-            false
-        } else {
-            result.is_ok()
-        }
-    }
-}
-
-fn send_media_key(key: VIRTUAL_KEY) {
-    let key_code = key.0 as u8;
-
-    unsafe {
-        keybd_event(key_code, 0, KEYBD_EVENT_FLAGS(0), 0);
-        thread::sleep(Duration::from_millis(18));
-        keybd_event(key_code, 0, KEYEVENTF_KEYUP, 0);
-    }
-}
-
 fn file_modified_unix_millis(path: &Path) -> Option<i64> {
     let modified = fs::metadata(path).ok()?.modified().ok()?;
     system_time_to_unix_millis(modified)
@@ -1134,10 +1012,6 @@ fn system_time_to_unix_millis(time: SystemTime) -> Option<i64> {
     time.duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
         .ok()
-}
-
-fn media_error(error: windows::core::Error) -> String {
-    format!("Windows media session error: {error}")
 }
 
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {

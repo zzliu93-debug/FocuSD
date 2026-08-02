@@ -19,6 +19,11 @@
   box-sizing: border-box;
 }
 
+html[data-input-modality="pointer"] button:focus,
+html[data-input-modality="pointer"] button:focus-visible {
+  outline: none;
+}
+
 html,
 body,
 #root {
@@ -920,6 +925,16 @@ input {
 .music-control-button:disabled {
   cursor: default;
   opacity: 0.36;
+}
+
+.music-control-button__pending {
+  animation: music-control-spin 700ms linear infinite;
+}
+
+@keyframes music-control-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .clipboard-panel {
@@ -3384,6 +3399,10 @@ input {
   .save-check-icon path,
   .save-check-icon polyline,
   .save-check-icon line {
+    animation: none;
+  }
+
+  .music-control-button__pending {
     animation: none;
   }
 

@@ -833,9 +833,7 @@ function IslandShell({
   const glassFrameRef = useRef<number | null>(null);
   const isExpanded = mode === "expanded";
   const isLiquidGlass = appearanceMode === "liquidGlass";
-  const isMusicPlaying =
-    mediaState.playbackStatus === "playing" ||
-    (mediaState.playbackStatus !== "paused" && mediaState.audioActive);
+  const isMusicPlaying = mediaState.playbackStatus === "playing";
   const className = [
     "island",
     `island--${mode}`,
@@ -2459,25 +2457,29 @@ function ArchiveBrowser({
 
 function MusicPlayerPanel({
   mediaState,
+  commandPending,
+  commandError,
   onPlayPause,
   onNext,
   onPrevious,
 }: {
   mediaState: MediaState;
+  commandPending: boolean;
+  commandError: string | null;
   onPlayPause: () => void;
   onNext: () => void;
   onPrevious: () => void;
 }) {
-  const isPlaying =
-    mediaState.playbackStatus === "playing" ||
-    (mediaState.playbackStatus !== "paused" && mediaState.audioActive);
+  const isPlaying = mediaState.playbackStatus === "playing";
   const isPaused = mediaState.playbackStatus === "paused";
   const hasAudioSignal = mediaState.available || mediaState.audioActive;
-  const statusLabel = isPaused
-    ? "Paused"
-    : hasAudioSignal
-      ? "Audio active"
-      : "No signal";
+  const statusLabel = commandError
+    ? "Control failed"
+    : isPaused
+      ? "Paused"
+      : isPlaying
+        ? "Playing"
+        : "No media";
   const peakPercent = Math.round(
     clamp(Math.log1p(mediaState.audioPeak * 160) / Math.log1p(160), 0, 1) *
       100,
@@ -2493,10 +2495,11 @@ function MusicPlayerPanel({
         .filter(Boolean)
         .join(" ")}
       aria-label="Music player"
+      title={commandError ?? undefined}
     >
       <div className="music-player__signal">
         <div className="music-player__status">
-          <span>{statusLabel}</span>
+          <span aria-live="polite">{statusLabel}</span>
           <strong>{peakPercent}%</strong>
         </div>
         <MusicLevelWave
@@ -2513,6 +2516,7 @@ function MusicPlayerPanel({
           title="Previous"
           aria-label="Previous track"
           onClick={onPrevious}
+          disabled={commandPending}
         >
           <SkipBack size={18} strokeWidth={2.4} />
         </button>
@@ -2521,9 +2525,17 @@ function MusicPlayerPanel({
           type="button"
           title={isPlaying ? "Pause" : "Play"}
           aria-label={isPlaying ? "Pause" : "Play"}
+          aria-busy={commandPending}
           onClick={onPlayPause}
+          disabled={commandPending}
         >
-          {isPlaying ? (
+          {commandPending ? (
+            <RefreshCcw
+              className="music-control-button__pending"
+              size={19}
+              strokeWidth={2.4}
+            />
+          ) : isPlaying ? (
             <Pause size={20} strokeWidth={2.5} />
           ) : (
             <Play size={20} strokeWidth={2.5} />
@@ -2535,6 +2547,7 @@ function MusicPlayerPanel({
           title="Next"
           aria-label="Next track"
           onClick={onNext}
+          disabled={commandPending}
         >
           <SkipForward size={18} strokeWidth={2.4} />
         </button>
@@ -3164,12 +3177,16 @@ function App() {
   const [page, setPage] = useState<IslandPage>("todo");
   const [mediaState, setMediaState] =
     useState<MediaState>(DEFAULT_MEDIA_STATE);
+  const [mediaCommandPending, setMediaCommandPending] = useState(false);
+  const [mediaCommandError, setMediaCommandError] = useState<string | null>(
+    null,
+  );
   const [agentStatus, setAgentStatus] =
     useState<AgentStatusSnapshot>(DEFAULT_AGENT_STATUS);
   const isRefreshingAgentStatus = useRef(false);
   const isRefreshingMediaState = useRef(false);
   const isRefreshingAudioLevel = useRef(false);
-  const mediaStatusLockUntil = useRef(0);
+  const isRunningMediaCommand = useRef(false);
   const [settings, setSettings] = useState<IslandSettings>(loadSettings);
   const [nativeGlassState, setNativeGlassState] =
     useState<NativeGlassState>("disabled");
@@ -3604,38 +3621,22 @@ function App() {
       const nextMediaState = await invoke<MediaState>("get_media_state");
 
       setMediaState((currentState) => {
-        const isStatusLocked = Date.now() < mediaStatusLockUntil.current;
         const nextPeak = Math.max(
           currentState.audioPeak * 0.82,
           nextMediaState.audioPeak,
         );
-        const measuredAudioActive =
-          nextMediaState.audioActive || nextPeak > AUDIO_ACTIVE_THRESHOLD;
         const audioActive =
-          isStatusLocked && currentState.playbackStatus === "paused"
-            ? false
-            : measuredAudioActive;
-        const playbackStatus = isStatusLocked
-          ? currentState.playbackStatus
-          : audioActive
-            ? "playing"
-            : "unavailable";
+          nextMediaState.audioActive || nextPeak > AUDIO_ACTIVE_THRESHOLD;
 
         return {
           ...nextMediaState,
           audioActive,
           audioPeak: audioActive ? nextPeak : 0,
-          playbackStatus,
         };
       });
     } catch (error) {
       console.error("Failed to read media state", error);
-      setMediaState((currentState) => ({
-        ...DEFAULT_MEDIA_STATE,
-        audioActive: currentState.audioActive,
-        audioPeak: currentState.audioPeak * 0.72,
-        playbackStatus: currentState.audioActive ? "playing" : "unavailable",
-      }));
+      setMediaState(DEFAULT_MEDIA_STATE);
     } finally {
       isRefreshingMediaState.current = false;
     }
@@ -3643,37 +3644,24 @@ function App() {
 
   const runMediaCommand = useCallback(
     async (command: "media_play_pause" | "media_next" | "media_previous") => {
-      if (command === "media_play_pause") {
-        setMediaState((currentState) => {
-          const isCurrentlyPlaying =
-            currentState.playbackStatus === "playing" ||
-            (currentState.playbackStatus !== "paused" &&
-              currentState.audioActive);
-          const nextStatus: MediaPlaybackStatus = isCurrentlyPlaying
-            ? "paused"
-            : "playing";
-          mediaStatusLockUntil.current = Date.now() + 900;
-
-          return {
-            ...currentState,
-            available: nextStatus === "playing" || currentState.available,
-            audioActive: nextStatus === "playing",
-            audioPeak:
-              nextStatus === "playing"
-                ? Math.max(currentState.audioPeak, 0.08)
-                : 0,
-            playbackStatus: nextStatus,
-          };
-        });
+      if (isRunningMediaCommand.current) {
+        return;
       }
 
+      isRunningMediaCommand.current = true;
+      setMediaCommandPending(true);
+      setMediaCommandError(null);
       try {
-        await invoke<void>(command);
+        const nextMediaState = await invoke<MediaState>(command);
+        setMediaState(nextMediaState);
       } catch (error) {
         console.error(`Failed to run media command: ${command}`, error);
+        setMediaCommandError(String(error));
+        await refreshMediaState();
+      } finally {
+        isRunningMediaCommand.current = false;
+        setMediaCommandPending(false);
       }
-      window.setTimeout(() => void refreshMediaState(), 120);
-      window.setTimeout(() => void refreshMediaState(), 980);
     },
     [refreshMediaState],
   );
@@ -3696,29 +3684,17 @@ function App() {
         }
 
         setMediaState((currentState) => {
-          const isStatusLocked = Date.now() < mediaStatusLockUntil.current;
-          const shouldSuppressAudio =
-            isStatusLocked && currentState.playbackStatus === "paused";
           const decayedPeak = currentState.audioPeak * 0.82;
           const nextPeak = audioLevel.active
             ? Math.max(decayedPeak, audioLevel.peak)
             : decayedPeak;
           const audioActive =
-            !shouldSuppressAudio &&
             (audioLevel.active || nextPeak > AUDIO_ACTIVE_THRESHOLD * 1.5);
 
           return {
             ...currentState,
             audioActive,
             audioPeak: audioActive ? nextPeak : 0,
-            playbackStatus:
-              isStatusLocked
-                ? currentState.playbackStatus
-                : audioActive
-                  ? "playing"
-                  : currentState.playbackStatus === "paused"
-                    ? "paused"
-                  : "unavailable",
           };
         });
       } catch (error) {
@@ -4526,6 +4502,8 @@ function App() {
         {page === "music" && (
           <MusicPlayerPanel
             mediaState={mediaState}
+            commandPending={mediaCommandPending}
+            commandError={mediaCommandError}
             onPlayPause={() => void runMediaCommand("media_play_pause")}
             onNext={() => void runMediaCommand("media_next")}
             onPrevious={() => void runMediaCommand("media_previous")}
