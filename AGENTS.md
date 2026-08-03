@@ -85,7 +85,8 @@ pnpm tauri build --no-bundle
 - 面向 Windows 的原生能力需要谨慎处理错误路径，Rust 命令应返回清晰的 `Result<_, String>`。
 - 修改窗口大小、定位、透明度、置顶、托盘或注册表逻辑时，要同时考虑折叠态、展开态、边缘收起和托盘隐藏。
 - 避免无关重构、格式化整仓或改动生成产物。
-- 每次完成改动之后关闭进程并用pnpm tauri build构建exe
+- 验证应与改动范围匹配，不要无条件运行 `pnpm tauri build`，但改动范围要求的构建不得省略：仅文档改动不需要构建；前端逻辑、样式或依赖改动必须运行 `pnpm build`；涉及 Tauri/Rust、Windows 原生能力、桌面配置或发布产物的改动必须运行对应的 Tauri 构建。
+- 不得因为构建耗时而跳过必要验证。若必要构建失败或受环境阻塞，应明确报告原因，不得将未完成的构建描述为已验证。
 
 ## 前端注意事项
 
@@ -105,12 +106,12 @@ pnpm tauri build --no-bundle
 
 ## 验证建议
 
-根据改动范围选择验证方式：
+根据改动范围选择最小且充分的验证方式，避免无关、耗时的构建：
 
 - 仅文档改动：确认 Markdown 内容可读即可。
-- 前端逻辑或样式改动：运行 `pnpm build`，必要时运行 `pnpm dev` 进行浏览器检查。
-- Tauri 命令、窗口、托盘、注册表或 Windows API 改动：运行 `pnpm tauri dev` 手动验证桌面行为。
-- 发布相关改动：运行 `pnpm tauri build --no-bundle` 或完整 `pnpm tauri build`。
+- 前端逻辑、样式或依赖改动：必须运行 `pnpm build`，必要时运行 `pnpm dev` 进行浏览器检查。
+- Tauri 命令、窗口、托盘、注册表、Windows API 或桌面配置改动：必须运行 `pnpm tauri build --no-bundle`，并在行为风险需要时运行 `pnpm tauri dev` 手动验证。
+- 发布相关改动：必须运行完整的 `pnpm tauri build`。
 
 ## Git 与协作
 

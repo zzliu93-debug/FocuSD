@@ -4,7 +4,7 @@
   <h1>FocuSD Island</h1>
 
   <p>
-    一款 Windows 灵动岛效率工具，把待办、每日笔记、Codex 状态指示灯、剪切板历史和媒体控制放在屏幕顶部,现已支持毛玻璃风格
+    一款 Windows 灵动岛效率工具，把待办、每日笔记、Codex 状态指示灯、剪切板历史和媒体控制放在屏幕顶部，现已支持毛玻璃风格
   </p>
 
   <p>
@@ -12,11 +12,11 @@
     ·
     <a href="https://github.com/zzliu93-debug/FocuSD/issues">反馈 Issue</a>
     ·
-    <a href="#路线图">查看路线图</a>
+    <a href="#star-history">Star 趋势</a>
   </p>
 
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-blue">
+    <img alt="Version" src="https://img.shields.io/badge/version-0.2.1-blue">
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0078D4">
     <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB">
     <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB">
@@ -33,7 +33,7 @@
 - [使用说明](#使用说明)
 - [数据与存储](#数据与存储)
 - [项目结构](#项目结构)
-- [路线图](#路线图)
+- [Star History](#star-history)
 - [参与贡献](#参与贡献)
 - [许可证](#许可证)
 - [致谢](#致谢)
@@ -126,8 +126,8 @@ FocuSD Island 支持两种使用方式：直接下载 Release，或者通过源�
 #### 构建步骤
 
 ```powershell
-git clone https://github.com/zzliu93-debug/lsland-1.git
-cd lsland-1
+git clone https://github.com/zzliu93-debug/FocuSD.git
+cd FocuSD
 pnpm install
 pnpm tauri build
 ```
@@ -135,8 +135,8 @@ pnpm tauri build
 构建完成后，安装包通常位于：
 
 ```text
-src-tauri/target/release/bundle/nsis/FocuSD Island_0.2.0_x64-setup.exe
-src-tauri/target/release/bundle/msi/FocuSD Island_0.2.0_x64_en-US.msi
+src-tauri/target/release/bundle/nsis/FocuSD Island_0.2.1_x64-setup.exe
+src-tauri/target/release/bundle/msi/FocuSD Island_0.2.1_x64_en-US.msi
 ```
 
 原始可执行文件通常位于：
@@ -162,18 +162,6 @@ pnpm tauri dev
 ```powershell
 pnpm dev
 ```
-
-### 常用命令
-
-| 命令 | 说明 |
-| --- | --- |
-| `pnpm install` | 安装前端和 Tauri CLI 依赖 |
-| `pnpm dev` | 启动 Vite 前端开发服务器 |
-| `pnpm build` | TypeScript 检查并构建前端 |
-| `pnpm preview` | 预览前端构建产物 |
-| `pnpm tauri dev` | 启动 Tauri 桌面开发模式 |
-| `pnpm tauri build` | 构建 Tauri 桌面应用和安装包 |
-| `pnpm tauri build --no-bundle` | 仅生成 release 可执行文件 |
 
 ## 使用说明
 
@@ -236,17 +224,9 @@ pnpm dev
 └── README.md
 ```
 
-## 路线图
+## Star History
 
-- [ ] 开发并适配 macOS 版本
-- [ ] 完善安装包发布流程和自动更新能力
-- [ ] 增强多显示器定位策略
-- [ ] 增加更完整的快捷键与键盘工作流
-- [ ] 扩展任务分类、标签和筛选能力
-- [ ] 增加数据导入、导出和同步方案
-- [ ] 优化剪切板历史、媒体控制和 Codex 状态指示灯体验
-
-如果你有更适合 Windows 灵动岛、桌面效率工具或 AI 编程工作流的想法，欢迎在 Issue 中讨论。
+[![Star History Chart](https://api.star-history.com/svg?repos=zzliu93-debug/FocuSD&type=Date)](https://star-history.com/#zzliu93-debug/FocuSD&Date)
 
 ## 参与贡献
 
