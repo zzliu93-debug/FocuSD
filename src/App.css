@@ -2928,6 +2928,42 @@ input {
   box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.14);
 }
 
+.locale-control {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  align-items: center;
+  gap: 12px;
+  color: rgba(248, 246, 240, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.locale-control select {
+  width: 128px;
+  height: 32px;
+  min-width: 0;
+  padding: 0 9px;
+  color: #f8f6f0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  outline: none;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.locale-control select:focus {
+  border-color: rgba(255, 209, 102, 0.68);
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.14);
+}
+
+.locale-control option {
+  color: #101013;
+}
+
 .shortcut-control {
   min-width: 0;
   display: grid;
