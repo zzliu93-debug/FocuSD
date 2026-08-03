@@ -18,12 +18,13 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, LogicalSize, Manager, PhysicalPosition, Position, Size, WebviewWindow,
-    WindowEvent,
+    App, AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, Position, Size,
+    WebviewWindow, WindowEvent,
 };
 use windows::Win32::{
     Foundation::{POINT, RECT},
     Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
+    UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON},
     UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect},
 };
 
@@ -104,9 +105,17 @@ struct IslandWindowState {
     margin_y: f64,
     collapsed_width: f64,
     expanded_height: f64,
+    custom_position: Option<IslandPosition>,
+    is_dragging: bool,
     glass_enabled: bool,
     glass_intensity: f64,
     glass_tint: (u8, u8, u8),
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+struct IslandPosition {
+    x: i32,
+    y: i32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -127,6 +136,8 @@ impl Default for IslandWindowState {
             margin_y: DEFAULT_MARGIN_Y,
             collapsed_width: COLLAPSED_ISLAND_WIDTH,
             expanded_height: DEFAULT_EXPANDED_ISLAND_HEIGHT,
+            custom_position: None,
+            is_dragging: false,
             glass_enabled: false,
             glass_intensity: 72.0,
             glass_tint: (16, 16, 19),
@@ -221,6 +232,7 @@ fn set_island_interaction(
     margin_y: Option<f64>,
     expanded_height: Option<f64>,
     collapsed_width: Option<f64>,
+    custom_position: Option<IslandPosition>,
     is_tucked: Option<bool>,
     glass_enabled: Option<bool>,
     glass_intensity: Option<f64>,
@@ -229,6 +241,12 @@ fn set_island_interaction(
     let window = main_window(&app)?;
     let mode = IslandMode::from_value(&mode)?;
     let previous_state = read_window_state();
+    let restored_custom_position = custom_position.filter(|position| {
+        monitor_for_island_position(&window, *position)
+            .ok()
+            .flatten()
+            .is_some()
+    });
     let state = mutate_window_state(|state| {
         state.mode = mode;
         state.is_tucked = is_tucked.unwrap_or(false);
@@ -246,6 +264,9 @@ fn set_island_interaction(
             state.collapsed_width =
                 collapsed_width.clamp(MIN_COLLAPSED_ISLAND_WIDTH, COLLAPSED_ISLAND_WIDTH);
         }
+        if state.custom_position.is_none() {
+            state.custom_position = restored_custom_position;
+        }
         state.glass_enabled = glass_enabled.unwrap_or(false);
         if let Some(glass_intensity) = glass_intensity {
             state.glass_intensity = glass_intensity.clamp(25.0, 100.0);
@@ -257,6 +278,59 @@ fn set_island_interaction(
     });
     apply_stage_geometry(&window, state)?;
     apply_glass_material(&window, previous_state, state)
+}
+
+#[tauri::command]
+fn start_island_drag(app: AppHandle) -> Result<(), String> {
+    let window = main_window(&app)?;
+    let current_state = read_window_state();
+
+    if current_state.is_tucked || current_state.is_dragging {
+        return Ok(());
+    }
+
+    let position = window.outer_position().map_err(|error| error.to_string())?;
+    mutate_window_state(|state| {
+        state.custom_position = Some(IslandPosition {
+            x: position.x,
+            y: position.y,
+        });
+        state.is_dragging = true;
+        *state
+    });
+
+    if let Err(error) = window.start_dragging() {
+        mutate_window_state(|state| {
+            state.is_dragging = false;
+            *state
+        });
+        return Err(error.to_string());
+    }
+
+    thread::spawn(move || {
+        while unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) } < 0 {
+            thread::sleep(Duration::from_millis(8));
+        }
+        thread::sleep(Duration::from_millis(8));
+
+        let final_position = window.outer_position().ok().map(|position| IslandPosition {
+            x: position.x,
+            y: position.y,
+        });
+        mutate_window_state(|state| {
+            state.is_dragging = false;
+            if let Some(position) = final_position {
+                state.custom_position = Some(position);
+            }
+            *state
+        });
+
+        if let Some(position) = final_position {
+            let _ = window.emit("island-position-changed", position);
+        }
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -1266,12 +1340,18 @@ fn apply_stage_geometry(window: &WebviewWindow, state: IslandWindowState) -> Res
         )))
         .map_err(|error| error.to_string())?;
 
-    let monitor = window
+    let current_monitor = window
+        .current_monitor()
+        .map_err(|error| error.to_string())?;
+    let primary_monitor = window
         .primary_monitor()
-        .map_err(|error| error.to_string())?
-        .or(window
-            .current_monitor()
-            .map_err(|error| error.to_string())?)
+        .map_err(|error| error.to_string())?;
+    let custom_monitor = state
+        .custom_position
+        .and_then(|position| monitor_for_island_position(window, position).ok().flatten());
+    let has_custom_monitor = custom_monitor.is_some();
+    let monitor = custom_monitor
+        .or_else(|| primary_monitor.or(current_monitor))
         .ok_or_else(|| "No monitor is available for island positioning.".to_string())?;
 
     let scale = monitor.scale_factor();
@@ -1285,12 +1365,66 @@ fn apply_stage_geometry(window: &WebviewWindow, state: IslandWindowState) -> Res
     } else {
         (state.margin_y * scale).round() as i32
     };
-    let x = monitor_position.x + ((monitor_size.width as i32 - physical_width) / 2);
-    let y = monitor_position.y + physical_top_offset;
+    let centered_x = monitor_position.x + ((monitor_size.width as i32 - physical_width) / 2);
+    let normal_y = monitor_position.y + physical_top_offset;
+    let tucked_y = monitor_position.y + physical_top_offset;
+    let mut positioned_state = state;
+    if !has_custom_monitor {
+        positioned_state.custom_position = None;
+    }
+    let (x, y) = resolve_stage_position(positioned_state, centered_x, normal_y, tucked_y);
 
     window
         .set_position(Position::Physical(PhysicalPosition::new(x, y)))
         .map_err(|error| error.to_string())
+}
+
+fn monitor_for_island_position(
+    window: &WebviewWindow,
+    position: IslandPosition,
+) -> Result<Option<Monitor>, String> {
+    let monitors = window
+        .available_monitors()
+        .map_err(|error| error.to_string())?;
+
+    Ok(monitors.into_iter().find(|monitor| {
+        let scale = monitor.scale_factor();
+        let island_center_x = position.x as f64 + STAGE_WINDOW_WIDTH * scale / 2.0;
+        let island_center_y = position.y as f64 + COLLAPSED_ISLAND_HEIGHT * scale / 2.0;
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+
+        island_center_x >= monitor_position.x as f64
+            && island_center_x < (monitor_position.x + monitor_size.width as i32) as f64
+            && island_center_y >= monitor_position.y as f64
+            && island_center_y < (monitor_position.y + monitor_size.height as i32) as f64
+    }))
+}
+
+fn resolve_stage_position(
+    state: IslandWindowState,
+    centered_x: i32,
+    normal_y: i32,
+    tucked_y: i32,
+) -> (i32, i32) {
+    match (state.custom_position, state.is_tucked) {
+        (Some(position), true) => (position.x, tucked_y),
+        (Some(position), false) => (position.x, position.y),
+        (None, true) => (centered_x, tucked_y),
+        (None, false) => (centered_x, normal_y),
+    }
+}
+
+fn record_dragged_position(position: PhysicalPosition<i32>) {
+    mutate_window_state(|state| {
+        if state.is_dragging && !state.is_tucked {
+            state.custom_position = Some(IslandPosition {
+                x: position.x,
+                y: position.y,
+            });
+        }
+        *state
+    });
 }
 
 fn start_cursor_passthrough_loop(window: WebviewWindow) {
@@ -1474,6 +1608,20 @@ mod tests {
     }
 
     #[test]
+    fn custom_position_survives_tuck_and_reveal() {
+        let mut custom = state(IslandMode::Collapsed, 1.0, DEFAULT_EXPANDED_ISLAND_HEIGHT);
+        custom.custom_position = Some(IslandPosition { x: 420, y: 180 });
+
+        assert_eq!(resolve_stage_position(custom, 100, 12, -48), (420, 180));
+
+        custom.is_tucked = true;
+        assert_eq!(resolve_stage_position(custom, 100, 12, -48), (420, -48));
+
+        custom.is_tucked = false;
+        assert_eq!(resolve_stage_position(custom, 100, 12, -48), (420, 180));
+    }
+
+    #[test]
     fn animated_region_hit_test_matches_the_visible_rounded_shape() {
         let region = GlassRegion {
             left: 250,
@@ -1580,6 +1728,15 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .on_window_event(|window, event| {
+            if window.label() != WINDOW_LABEL {
+                return;
+            }
+
+            if let WindowEvent::Moved(position) = event {
+                record_dragged_position(*position);
+                return;
+            }
+
             if !matches!(event, WindowEvent::ScaleFactorChanged { .. }) {
                 return;
             }
@@ -1616,6 +1773,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_island_layout,
             set_island_interaction,
+            start_island_drag,
             save_todo_markdown,
             get_default_todo_save_directory,
             show_ready_island,

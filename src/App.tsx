@@ -145,6 +145,11 @@ type AgentHooksInstallState = "idle" | "installing" | "installed" | "error";
 type AppearanceMode = "classic" | "liquidGlass";
 type NativeGlassState = "active" | "css-fallback" | "disabled";
 
+type IslandPosition = {
+  x: number;
+  y: number;
+};
+
 type IslandSettings = {
   appearanceMode: AppearanceMode;
   glassIntensity: number;
@@ -182,6 +187,7 @@ type IslandShellProps = {
   agentVisualState: AgentVisualState;
   agentStatusLabel: string;
   onOpenPage: (page: IslandPage) => void;
+  onWindowDragStart: () => void;
   onCollapse: () => void;
   onMinimize: () => void;
   onTuck: () => void;
@@ -200,6 +206,7 @@ const DAILY_NOTE_STORAGE_KEY = "focusd-island-daily-note";
 const TODO_SAVE_DIRECTORY_STORAGE_KEY = "focusd-island-save-directory";
 const TODO_LAST_SAVED_SIGNATURE_STORAGE_KEY =
   "focusd-island-last-saved-signature";
+const ISLAND_POSITION_STORAGE_KEY = "focusd-island-position";
 const MIN_COLLAPSED_ISLAND_WIDTH = 240;
 const MAX_COLLAPSED_ISLAND_WIDTH = 320;
 const MIN_COLLAPSED_TEXT_UNITS = 2;
@@ -654,6 +661,30 @@ function loadSettings(): IslandSettings {
   }
 }
 
+function loadIslandPosition(): IslandPosition | null {
+  const stored = window.localStorage.getItem(ISLAND_POSITION_STORAGE_KEY);
+
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const position = JSON.parse(stored) as Partial<IslandPosition>;
+    if (
+      typeof position.x !== "number" ||
+      typeof position.y !== "number" ||
+      !Number.isFinite(position.x) ||
+      !Number.isFinite(position.y)
+    ) {
+      return null;
+    }
+
+    return { x: Math.round(position.x), y: Math.round(position.y) };
+  } catch {
+    return null;
+  }
+}
+
 function loadSettingPresets(): IslandPreset[] {
   const stored = window.localStorage.getItem(SETTINGS_PRESETS_STORAGE_KEY);
 
@@ -851,6 +882,7 @@ function IslandShell({
   agentVisualState,
   agentStatusLabel,
   onOpenPage,
+  onWindowDragStart,
   onCollapse,
   onMinimize,
   onTuck,
@@ -859,6 +891,11 @@ function IslandShell({
   children,
 }: IslandShellProps) {
   const glassFrameRef = useRef<number | null>(null);
+  const windowDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   const isExpanded = mode === "expanded";
   const isLiquidGlass = appearanceMode === "liquidGlass";
   const isMusicPlaying = mediaState.playbackStatus === "playing";
@@ -934,17 +971,77 @@ function IslandShell({
     [isLiquidGlass],
   );
 
+  const prepareWindowDrag = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.button !== 0 || isTucked) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          "button, input, textarea, select, a, [contenteditable='true'], [data-window-drag='false']",
+        )
+      ) {
+        return;
+      }
+
+      windowDragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [isTucked],
+  );
+
+  const handleWindowDragMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = windowDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId || event.buttons !== 1) {
+        return;
+      }
+
+      if (
+        Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 3
+      ) {
+        return;
+      }
+
+      windowDragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      event.preventDefault();
+      onWindowDragStart();
+    },
+    [onWindowDragStart],
+  );
+
+  const cancelWindowDrag = useCallback(() => {
+    windowDragRef.current = null;
+  }, []);
+
+  const finishCollapsedPointer = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = windowDragRef.current;
+      windowDragRef.current = null;
+
+      if (drag?.pointerId === event.pointerId) {
+        onOpenPage(page);
+      }
+    },
+    [onOpenPage, page],
+  );
+
   return (
     <section
       className={className}
       aria-label={collapsedLabel}
       onPointerMove={handleGlassPointerMove}
       onPointerLeave={resetGlassPointer}
-      onClick={() => {
-        if (!isExpanded) {
-          onOpenPage(page);
-        }
-      }}
       onMouseEnter={() => {
         if (isTucked) {
           onReveal();
@@ -957,7 +1054,14 @@ function IslandShell({
           <span className="island__glass-highlight" />
         </div>
       )}
-      <div className="island__collapsed" aria-hidden={isExpanded}>
+      <div
+        className="island__collapsed"
+        aria-hidden={isExpanded}
+        onPointerDown={prepareWindowDrag}
+        onPointerMove={handleWindowDragMove}
+        onPointerUp={finishCollapsedPointer}
+        onPointerCancel={cancelWindowDrag}
+      >
         <span className={pulseClassName} title={agentStatusLabel} />
         {showTitle && <span className="island__brand">FocuSD</span>}
         {activeTaskTitle ? (
@@ -991,7 +1095,13 @@ function IslandShell({
       </div>
 
       <div className="island__expanded" aria-hidden={!isExpanded}>
-        <header className="island__header">
+        <header
+          className="island__header"
+          onPointerDown={prepareWindowDrag}
+          onPointerMove={handleWindowDragMove}
+          onPointerUp={cancelWindowDrag}
+          onPointerCancel={cancelWindowDrag}
+        >
           <div className="island__title">
             <CircleDot
               className={agentStatusIconClassName}
@@ -1058,6 +1168,7 @@ function IslandShell({
 
           <div
             className="island__collapse-target"
+            data-window-drag="false"
             onClick={onCollapse}
           />
 
@@ -3267,6 +3378,7 @@ function App() {
   const didHydrateAutoSave = useRef(false);
   const didCheckDate = useRef(false);
   const didShowInitialWindow = useRef(false);
+  const islandPositionRef = useRef<IslandPosition | null>(loadIslandPosition());
   const selectedArchive =
     archives.find((archive) => archive.date === selectedArchiveDate) ?? null;
   const activeTaskTitle = useMemo(() => {
@@ -3444,6 +3556,7 @@ function App() {
           marginY: nextSettings.marginY,
           expandedHeight: nextExpandedHeight,
           collapsedWidth: nextCollapsedWidth,
+          customPosition: islandPositionRef.current,
           isTucked: nextIsTucked,
             glassEnabled: nextSettings.appearanceMode === "liquidGlass",
             glassIntensity: nextSettings.glassIntensity,
@@ -3614,6 +3727,12 @@ function App() {
     } catch (error) {
       console.error("Failed to minimize island", error);
     }
+  }, []);
+
+  const startIslandDrag = useCallback(() => {
+    void invoke("start_island_drag").catch((error) => {
+      console.error("Failed to start island drag", error);
+    });
   }, []);
 
   const setIslandMode = useCallback((nextMode: IslandMode) => {
@@ -4499,6 +4618,34 @@ function App() {
   }, [settings.marginY, scheduleNativeLayout]);
 
   useEffect(() => {
+    let didCancel = false;
+    let unlisten: (() => void) | null = null;
+
+    void listen<IslandPosition>("island-position-changed", ({ payload }) => {
+      islandPositionRef.current = payload;
+      window.localStorage.setItem(
+        ISLAND_POSITION_STORAGE_KEY,
+        JSON.stringify(payload),
+      );
+    })
+      .then((nextUnlisten) => {
+        if (didCancel) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to listen for island position changes", error);
+      });
+
+    return () => {
+      didCancel = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
     void syncNativeInteraction(
       mode,
       settings,
@@ -4590,6 +4737,7 @@ function App() {
         agentVisualState={agentVisualState}
         agentStatusLabel={agentStatusLabel}
         onOpenPage={openIslandPage}
+        onWindowDragStart={startIslandDrag}
         onCollapse={collapseIsland}
         onMinimize={minimizeIsland}
         onTuck={tuckIsland}

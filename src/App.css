@@ -224,7 +224,7 @@ input {
   width: var(--collapsed-island-width);
   height: 58px;
   border-radius: 999px;
-  cursor: pointer;
+  cursor: grab;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.22)),
     var(--island-background-color);
@@ -548,6 +548,12 @@ input {
   align-items: center;
   gap: 8px;
   min-height: 34px;
+  cursor: grab;
+}
+
+.island--collapsed:active,
+.island__header:active {
+  cursor: grabbing;
 }
 
 .island__title {
