@@ -548,11 +548,9 @@ input {
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  cursor: grab;
 }
 
-.island--collapsed:active,
-.island__header:active {
+.island--collapsed:active {
   cursor: grabbing;
 }
 

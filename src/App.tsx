@@ -13,7 +13,6 @@ import {
 } from "react";
 import {
   Check,
-  ChevronUp,
   CircleDot,
   ClipboardList,
   Columns2,
@@ -21,6 +20,7 @@ import {
   GripVertical,
   ImageIcon,
   Keyboard,
+  LocateFixed,
   Minus,
   NotebookPen,
   Pencil,
@@ -189,6 +189,7 @@ type IslandShellProps = {
   onOpenPage: (page: IslandPage) => void;
   onWindowDragStart: () => void;
   onCollapse: () => void;
+  onResetPosition: () => void;
   onMinimize: () => void;
   onTuck: () => void;
   onReveal: () => void;
@@ -884,6 +885,7 @@ function IslandShell({
   onOpenPage,
   onWindowDragStart,
   onCollapse,
+  onResetPosition,
   onMinimize,
   onTuck,
   onReveal,
@@ -1095,13 +1097,7 @@ function IslandShell({
       </div>
 
       <div className="island__expanded" aria-hidden={!isExpanded}>
-        <header
-          className="island__header"
-          onPointerDown={prepareWindowDrag}
-          onPointerMove={handleWindowDragMove}
-          onPointerUp={cancelWindowDrag}
-          onPointerCancel={cancelWindowDrag}
-        >
+        <header className="island__header">
           <div className="island__title">
             <CircleDot
               className={agentStatusIconClassName}
@@ -1176,14 +1172,14 @@ function IslandShell({
             <button
               className="icon-button"
               type="button"
-              title="收起"
-              aria-label="收起岛屿"
+              title="复位"
+              aria-label="恢复岛屿默认位置"
               onClick={(event) => {
                 event.stopPropagation();
-                onCollapse();
+                onResetPosition();
               }}
             >
-              <ChevronUp size={18} strokeWidth={2.2} />
+              <LocateFixed size={17} strokeWidth={2.2} />
             </button>
             <button
               className="icon-button"
@@ -3735,6 +3731,16 @@ function App() {
     });
   }, []);
 
+  const resetIslandPosition = useCallback(async () => {
+    try {
+      await invoke("reset_island_position");
+      islandPositionRef.current = null;
+      window.localStorage.removeItem(ISLAND_POSITION_STORAGE_KEY);
+    } catch (error) {
+      console.error("Failed to reset island position", error);
+    }
+  }, []);
+
   const setIslandMode = useCallback((nextMode: IslandMode) => {
     setMode(nextMode);
     setIsTucked(false);
@@ -4739,6 +4745,7 @@ function App() {
         onOpenPage={openIslandPage}
         onWindowDragStart={startIslandDrag}
         onCollapse={collapseIsland}
+        onResetPosition={resetIslandPosition}
         onMinimize={minimizeIsland}
         onTuck={tuckIsland}
         onReveal={revealIsland}

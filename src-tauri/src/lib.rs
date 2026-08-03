@@ -285,7 +285,10 @@ fn start_island_drag(app: AppHandle) -> Result<(), String> {
     let window = main_window(&app)?;
     let current_state = read_window_state();
 
-    if current_state.is_tucked || current_state.is_dragging {
+    if !matches!(current_state.mode, IslandMode::Collapsed)
+        || current_state.is_tucked
+        || current_state.is_dragging
+    {
         return Ok(());
     }
 
@@ -317,20 +320,39 @@ fn start_island_drag(app: AppHandle) -> Result<(), String> {
             x: position.x,
             y: position.y,
         });
-        mutate_window_state(|state| {
-            state.is_dragging = false;
-            if let Some(position) = final_position {
-                state.custom_position = Some(position);
+        let did_finish_drag = {
+            let mut state = window_state().lock().expect("window state poisoned");
+            if !state.is_dragging {
+                false
+            } else {
+                state.is_dragging = false;
+                if let Some(position) = final_position {
+                    state.custom_position = Some(position);
+                }
+                true
             }
-            *state
-        });
+        };
 
-        if let Some(position) = final_position {
-            let _ = window.emit("island-position-changed", position);
+        if did_finish_drag {
+            if let Some(position) = final_position {
+                let _ = window.emit("island-position-changed", position);
+            }
         }
     });
 
     Ok(())
+}
+
+#[tauri::command]
+fn reset_island_position(app: AppHandle) -> Result<(), String> {
+    let window = main_window(&app)?;
+    let state = mutate_window_state(|state| {
+        state.custom_position = None;
+        state.is_dragging = false;
+        *state
+    });
+
+    apply_stage_geometry(&window, state)
 }
 
 #[tauri::command]
@@ -1774,6 +1796,7 @@ pub fn run() {
             set_island_layout,
             set_island_interaction,
             start_island_drag,
+            reset_island_position,
             save_todo_markdown,
             get_default_todo_save_directory,
             show_ready_island,
