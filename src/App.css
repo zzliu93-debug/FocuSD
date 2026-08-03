@@ -136,6 +136,8 @@ input {
     inset 0 -1px 0 rgba(8, 18, 28, 0.16),
     inset 1px 0 0 rgba(130, 224, 255, var(--glass-cyan-alpha)),
     inset -1px 0 0 rgba(255, 158, 230, var(--glass-magenta-alpha));
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(1.18);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(1.18);
 }
 
 .island--appearance-liquidGlass.island--glass-css-fallback {
