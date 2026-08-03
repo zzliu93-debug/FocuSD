@@ -41,6 +41,23 @@ FocuSD Island 是一个 Windows 桌面悬浮效率工具。它以透明、无边
 | Codex 状态 | 显示任务正在运行、已完成、失败或可能中断。 |
 | 剪切板历史 | 记录文本和图片，支持备注、搜索、收藏和复制。 |
 | 媒体与外观 | 控制系统媒体，并提供经典与液态玻璃外观设置。 |
+| 多语言界面 | 界面支持简体中文和 English，可在设置中切换，选择会记住并默认跟随系统语言。 |
+
+## 多语言 / Languages
+
+FocuSD Island 的界面支持简体中文和 English。在 **设置 → 语言** 中即可切换，选择会保存在本地，并在首次启动时默认跟随系统语言。
+
+新增一种语言只需两步，无需引入额外依赖：
+
+1. 在 `src/i18n/locales/` 下新建一个语言文件（可复制 `en.ts`），按 `Translations` 类型翻译所有文案。类型会保证漏翻的字段在编译时报错。
+2. 在 `src/i18n/types.ts` 的 `LocaleCode` 中加入新的语言代码，并在 `src/i18n/index.ts` 的 `TRANSLATIONS` 中注册。
+
+The interface is available in Simplified Chinese and English. Switch it under **Settings → Language**. The choice is stored locally and defaults to the system locale on first launch.
+
+Adding a language takes two steps and needs no extra dependency:
+
+1. Create a locale file under `src/i18n/locales/` (copy `en.ts`) and translate every field described by the `Translations` type. The type makes any missing key a compile error.
+2. Add the new code to `LocaleCode` in `src/i18n/types.ts` and register it in `TRANSLATIONS` in `src/i18n/index.ts`.
 
 ## Codex 状态指示灯
 
